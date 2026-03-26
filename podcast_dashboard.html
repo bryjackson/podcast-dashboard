@@ -1,0 +1,1149 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>The Go and Send Podcast — Analytics</title>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.min.js"></script>
+<link href="https://fonts.googleapis.com/css2?family=Bebas+Neue&family=DM+Sans:wght@300;400;500;600&family=DM+Mono:wght@400;500&display=swap" rel="stylesheet">
+<style>
+  :root {
+    --bg: #ffffff;
+    --surface: #f5f5f5;
+    --surface2: #ebebeb;
+    --border: #dddddd;
+    --accent: #1a1a1a;
+    --accent2: #ff6b35;
+    --yt: #cc0000;
+    --sc: #1a6ec7;
+    --text: #111111;
+    --muted: #888888;
+    --success: #1a7a3f;
+  }
+
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+
+  body {
+    background: var(--bg);
+    color: var(--text);
+    font-family: 'DM Sans', sans-serif;
+    min-height: 100vh;
+    overflow-x: hidden;
+  }
+
+  /* Grain overlay */
+  body::before {
+    content: '';
+    position: fixed;
+    inset: 0;
+    background-image: url("data:image/svg+xml,%3Csvg viewBox='0 0 256 256' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='noise'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='4' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23noise)' opacity='0.03'/%3E%3C/svg%3E");
+    pointer-events: none;
+    z-index: 1000;
+    opacity: 0.15;
+  }
+
+  header {
+    padding: 48px 48px 0;
+    display: flex;
+    align-items: flex-end;
+    justify-content: space-between;
+    border-bottom: 1px solid var(--border);
+    padding-bottom: 24px;
+  }
+
+  .header-left h1 {
+    font-family: 'Bebas Neue', sans-serif;
+    font-size: 64px;
+    letter-spacing: 2px;
+    line-height: 1;
+    color: var(--text);
+  }
+
+  .header-left h1 span {
+    color: #cc0000;
+  }
+
+  .header-left p {
+    color: var(--muted);
+    font-size: 13px;
+    font-family: 'DM Mono', monospace;
+    margin-top: 6px;
+    letter-spacing: 1px;
+    text-transform: uppercase;
+  }
+
+  .status-badges {
+    display: flex;
+    gap: 12px;
+    align-items: center;
+  }
+
+  .badge {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    padding: 6px 12px;
+    border-radius: 2px;
+    font-size: 11px;
+    font-family: 'DM Mono', monospace;
+    letter-spacing: 1px;
+    text-transform: uppercase;
+    border: 1px solid var(--border);
+    color: var(--muted);
+    background: var(--surface);
+  }
+
+  .badge.connected {
+    border-color: var(--success);
+    color: var(--success);
+  }
+
+  .badge .dot {
+    width: 6px; height: 6px;
+    border-radius: 50%;
+    background: currentColor;
+  }
+
+  /* Credentials Panel */
+  #credentials-panel {
+    margin: 32px 48px;
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-left: 3px solid #cc0000;
+    padding: 32px;
+  }
+
+  #credentials-panel h2 {
+    font-family: 'Bebas Neue', sans-serif;
+    font-size: 24px;
+    letter-spacing: 1px;
+    margin-bottom: 6px;
+  }
+
+  #credentials-panel p {
+    color: var(--muted);
+    font-size: 13px;
+    margin-bottom: 24px;
+  }
+
+  .creds-grid {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 16px;
+    margin-bottom: 24px;
+  }
+
+  .cred-group label {
+    display: block;
+    font-size: 11px;
+    font-family: 'DM Mono', monospace;
+    letter-spacing: 1px;
+    text-transform: uppercase;
+    color: var(--muted);
+    margin-bottom: 6px;
+  }
+
+  .cred-group input {
+    width: 100%;
+    background: var(--bg);
+    border: 1px solid var(--border);
+    color: var(--text);
+    padding: 10px 14px;
+    font-family: 'DM Mono', monospace;
+    font-size: 13px;
+    outline: none;
+    transition: border-color 0.2s;
+  }
+
+  .cred-group input:focus {
+    border-color: #111111;
+  }
+
+  .creds-actions {
+    display: flex;
+    gap: 12px;
+    align-items: center;
+  }
+
+  .btn-primary {
+    background: #111111;
+    color: #ffffff;
+    border: none;
+    padding: 12px 28px;
+    font-family: 'Bebas Neue', sans-serif;
+    font-size: 18px;
+    letter-spacing: 1px;
+    cursor: pointer;
+    transition: opacity 0.2s, transform 0.1s;
+  }
+
+  .btn-primary:hover { opacity: 0.85; transform: translateY(-1px); }
+  .btn-primary:active { transform: translateY(0); }
+
+  .btn-secondary {
+    background: transparent;
+    color: var(--muted);
+    border: 1px solid var(--border);
+    padding: 12px 20px;
+    font-family: 'DM Mono', monospace;
+    font-size: 12px;
+    letter-spacing: 1px;
+    cursor: pointer;
+    transition: color 0.2s, border-color 0.2s;
+  }
+
+  .btn-secondary:hover { color: var(--text); border-color: var(--text); }
+
+  #auth-status {
+    font-size: 12px;
+    font-family: 'DM Mono', monospace;
+    color: var(--muted);
+  }
+
+  #auth-status.ok { color: var(--success); }
+  #auth-status.err { color: var(--accent2); }
+
+  /* Date Range Bar */
+  .controls-bar {
+    margin: 0 48px 32px;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 16px;
+  }
+
+  .range-tabs {
+    display: flex;
+    gap: 2px;
+    background: var(--surface);
+    padding: 4px;
+    border: 1px solid var(--border);
+  }
+
+  .range-tab {
+    padding: 7px 16px;
+    font-family: 'DM Mono', monospace;
+    font-size: 12px;
+    letter-spacing: 1px;
+    text-transform: uppercase;
+    cursor: pointer;
+    background: transparent;
+    border: none;
+    color: var(--muted);
+    transition: all 0.15s;
+  }
+
+  .range-tab.active {
+    background: #111111;
+    color: #ffffff;
+  }
+
+  .last-updated {
+    font-size: 11px;
+    font-family: 'DM Mono', monospace;
+    color: var(--muted);
+  }
+
+  /* Stats Row */
+  .stats-row {
+    display: grid;
+    grid-template-columns: repeat(4, 1fr);
+    gap: 1px;
+    margin: 0 48px 32px;
+    background: var(--border);
+    border: 1px solid var(--border);
+  }
+
+  .stat-card {
+    background: var(--surface);
+    padding: 28px 24px;
+    position: relative;
+    overflow: hidden;
+  }
+
+  .stat-card::after {
+    content: '';
+    position: absolute;
+    top: 0; left: 0; right: 0;
+    height: 2px;
+  }
+
+  .stat-card.yt::after { background: var(--yt); }
+  .stat-card.sc::after { background: var(--sc); }
+  .stat-card.combined::after { background: var(--accent); }
+  .stat-card.growth::after { background: var(--success); }
+
+  .stat-label {
+    font-size: 11px;
+    font-family: 'DM Mono', monospace;
+    letter-spacing: 1px;
+    text-transform: uppercase;
+    color: var(--muted);
+    margin-bottom: 10px;
+  }
+
+  .stat-value {
+    font-family: 'Bebas Neue', sans-serif;
+    font-size: 48px;
+    line-height: 1;
+    letter-spacing: 1px;
+  }
+
+  .stat-card.yt .stat-value { color: var(--yt); }
+  .stat-card.sc .stat-value { color: var(--sc); }
+  .stat-card.combined .stat-value { color: #111111; }
+  .stat-card.growth .stat-value { color: var(--success); }
+
+  .stat-sub {
+    font-size: 12px;
+    color: var(--muted);
+    margin-top: 6px;
+  }
+
+  /* Charts Grid */
+  .charts-grid {
+    display: grid;
+    grid-template-columns: 2fr 1fr;
+    gap: 1px;
+    margin: 0 48px 1px;
+    background: var(--border);
+  }
+
+  .chart-card {
+    background: var(--surface);
+    padding: 28px;
+  }
+
+  .chart-card.full {
+    grid-column: 1 / -1;
+  }
+
+  .chart-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: flex-start;
+    margin-bottom: 24px;
+  }
+
+  .chart-title {
+    font-family: 'Bebas Neue', sans-serif;
+    font-size: 22px;
+    letter-spacing: 1px;
+  }
+
+  .chart-legend {
+    display: flex;
+    gap: 16px;
+  }
+
+  .legend-item {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    font-size: 11px;
+    font-family: 'DM Mono', monospace;
+    color: var(--muted);
+  }
+
+  .legend-dot {
+    width: 8px; height: 8px;
+    border-radius: 50%;
+  }
+
+  .chart-wrap {
+    position: relative;
+    height: 260px;
+  }
+
+  /* Top Episodes Table */
+  .table-section {
+    margin: 1px 48px 48px;
+    background: var(--border);
+  }
+
+  .table-card {
+    background: var(--surface);
+    padding: 28px;
+  }
+
+  table {
+    width: 100%;
+    border-collapse: collapse;
+  }
+
+  thead th {
+    font-size: 11px;
+    font-family: 'DM Mono', monospace;
+    letter-spacing: 1px;
+    text-transform: uppercase;
+    color: var(--muted);
+    text-align: left;
+    padding: 0 16px 14px 0;
+    border-bottom: 1px solid var(--border);
+  }
+
+  tbody tr {
+    border-bottom: 1px solid var(--border);
+    transition: background 0.15s;
+  }
+
+  tbody tr:hover { background: var(--surface2); }
+  tbody tr:last-child { border-bottom: none; }
+
+  tbody td {
+    padding: 14px 16px 14px 0;
+    font-size: 14px;
+  }
+
+  .ep-rank {
+    font-family: 'Bebas Neue', sans-serif;
+    font-size: 22px;
+    color: var(--muted);
+    width: 40px;
+  }
+
+  .ep-title {
+    font-weight: 500;
+    max-width: 340px;
+  }
+
+  .ep-platform {
+    display: inline-flex;
+    align-items: center;
+    gap: 5px;
+    font-size: 11px;
+    font-family: 'DM Mono', monospace;
+    padding: 3px 8px;
+    border-radius: 2px;
+  }
+
+  .ep-platform.yt { background: rgba(255,68,68,0.1); color: var(--yt); }
+  .ep-platform.sc { background: rgba(74,158,255,0.1); color: var(--sc); }
+
+  .ep-views {
+    font-family: 'DM Mono', monospace;
+    font-size: 13px;
+    font-weight: 500;
+  }
+
+  .ep-bar-wrap {
+    width: 120px;
+  }
+
+  .ep-bar {
+    height: 4px;
+    background: var(--border);
+    border-radius: 2px;
+    overflow: hidden;
+  }
+
+  .ep-bar-fill {
+    height: 100%;
+    border-radius: 2px;
+    transition: width 0.8s ease;
+  }
+
+  /* Loading & Error states */
+  .loading {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    height: 260px;
+    color: var(--muted);
+    font-family: 'DM Mono', monospace;
+    font-size: 13px;
+    flex-direction: column;
+    gap: 12px;
+  }
+
+  .spinner {
+    width: 24px; height: 24px;
+    border: 2px solid var(--border);
+    border-top-color: #cc0000;
+    border-radius: 50%;
+    animation: spin 0.8s linear infinite;
+  }
+
+  @keyframes spin { to { transform: rotate(360deg); } }
+
+  .empty-state {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    height: 260px;
+    color: var(--muted);
+    font-family: 'DM Mono', monospace;
+    font-size: 12px;
+    letter-spacing: 1px;
+    text-transform: uppercase;
+    border: 1px dashed var(--border);
+  }
+
+  /* OAuth button */
+  .oauth-btn {
+    display: inline-flex;
+    align-items: center;
+    gap: 8px;
+    background: var(--surface2);
+    border: 1px solid var(--border);
+    color: var(--text);
+    padding: 10px 20px;
+    font-family: 'DM Mono', monospace;
+    font-size: 12px;
+    letter-spacing: 1px;
+    cursor: pointer;
+    transition: all 0.2s;
+    text-decoration: none;
+  }
+
+  .oauth-btn:hover { border-color: var(--accent); color: var(--accent); }
+
+  .toggle-creds {
+    font-size: 12px;
+    font-family: 'DM Mono', monospace;
+    color: var(--muted);
+    cursor: pointer;
+    text-decoration: underline;
+    text-underline-offset: 3px;
+    background: none;
+    border: none;
+    padding: 0;
+    margin: 0 48px 24px;
+    display: block;
+  }
+
+  .toggle-creds:hover { color: var(--text); }
+
+  @media (max-width: 900px) {
+    header, .controls-bar, .stats-row, .charts-grid, .table-section, #credentials-panel { margin-left: 20px; margin-right: 20px; }
+    .stats-row { grid-template-columns: 1fr 1fr; }
+    .charts-grid { grid-template-columns: 1fr; }
+    .creds-grid { grid-template-columns: 1fr; }
+    header { flex-direction: column; align-items: flex-start; gap: 16px; }
+    .header-left h1 { font-size: 44px; }
+  }
+</style>
+</head>
+<body>
+
+<header>
+  <div class="header-left">
+    <h1>GO AND SEND <span>ANALYTICS</span></h1>
+    <p>Podcast Intelligence Dashboard</p>
+  </div>
+  <div class="status-badges">
+    <div class="badge" id="yt-badge"><span class="dot"></span> YouTube</div>
+    <div class="badge" id="sc-badge"><span class="dot"></span> Simplecast</div>
+  </div>
+</header>
+
+<!-- Credentials Panel -->
+<div id="credentials-panel">
+  <h2>Connect Your Platforms</h2>
+  <p>Enter your API credentials below. They stay in your browser and are never stored or sent anywhere.</p>
+  <div class="creds-grid">
+    <div class="cred-group">
+      <label>YouTube API Key</label>
+      <input type="password" id="yt-api-key" placeholder="AIza...">
+    </div>
+    <div class="cred-group">
+      <label>YouTube OAuth Client ID</label>
+      <input type="password" id="yt-client-id" placeholder="123456...apps.googleusercontent.com">
+    </div>
+    <div class="cred-group">
+      <label>Simplecast API Token</label>
+      <input type="password" id="sc-token" placeholder="your-simplecast-token">
+    </div>
+  </div>
+  <div class="creds-actions">
+    <button class="btn-primary" onclick="initDashboard()">LOAD DASHBOARD</button>
+    <span id="auth-status"></span>
+  </div>
+
+  <!-- Step 2: OAuth link + code paste -->
+  <div id="oauth-step" style="display:none; margin-top:24px; padding-top:24px; border-top:1px solid var(--border);">
+    <p style="margin-bottom:12px; color:var(--text); font-size:13px;">
+      <strong>Step 2 — Authorize with Google</strong><br>
+      <span style="color:var(--muted)">Click the button below. Google will open in a new tab. Sign in, approve access, and you'll land on a page that says "This site can't be reached" — that's normal! Copy the full URL from that page and paste it below.</span>
+    </p>
+    <div style="display:flex; gap:12px; align-items:flex-start; flex-wrap:wrap;">
+      <button class="oauth-btn" id="oauth-btn" onclick="openGoogleAuth()">
+        <svg width="16" height="16" viewBox="0 0 16 16" fill="none"><circle cx="8" cy="8" r="7" stroke="currentColor" stroke-width="1.5"/><path d="M8 5v3l2 2" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/></svg>
+        Open Google Login
+      </button>
+      <div style="flex:1; min-width:240px;">
+        <input type="text" id="oauth-code-input" placeholder="Paste the full redirect URL here..." style="width:100%; background:var(--bg); border:1px solid var(--border); color:var(--text); padding:10px 14px; font-family:'DM Mono',monospace; font-size:12px; outline:none;">
+      </div>
+      <button class="btn-primary" onclick="submitOAuthCode()" style="font-size:15px; padding:10px 20px;">CONNECT</button>
+    </div>
+    <div id="oauth-step-status" style="margin-top:10px; font-size:12px; font-family:'DM Mono',monospace; color:var(--muted);"></div>
+  </div>
+</div>
+
+<button class="toggle-creds" id="toggle-creds-btn" style="display:none" onclick="toggleCreds()">▲ Hide credentials</button>
+
+<!-- Controls -->
+<div class="controls-bar">
+  <div class="range-tabs">
+    <button class="range-tab" onclick="setRange(28)" id="tab-28">28D</button>
+    <button class="range-tab active" onclick="setRange(90)" id="tab-90">90D</button>
+    <button class="range-tab" onclick="setRange(365)" id="tab-365">12M</button>
+  </div>
+  <span class="last-updated" id="last-updated">—</span>
+</div>
+
+<!-- Stats Row -->
+<div class="stats-row">
+  <div class="stat-card yt">
+    <div class="stat-label">YT Subscribers</div>
+    <div class="stat-value" id="stat-subs">—</div>
+    <div class="stat-sub" id="stat-subs-sub">Connect to load</div>
+  </div>
+  <div class="stat-card sc">
+    <div class="stat-label">Simplecast Listeners</div>
+    <div class="stat-value" id="stat-listeners">—</div>
+    <div class="stat-sub" id="stat-listeners-sub">Connect to load</div>
+  </div>
+  <div class="stat-card combined">
+    <div class="stat-label">Total Views / Plays</div>
+    <div class="stat-value" id="stat-total">—</div>
+    <div class="stat-sub" id="stat-total-sub">In selected period</div>
+  </div>
+  <div class="stat-card growth">
+    <div class="stat-label">Episodes Published</div>
+    <div class="stat-value" id="stat-episodes">—</div>
+    <div class="stat-sub" id="stat-episodes-sub">All time</div>
+  </div>
+</div>
+
+<!-- Charts -->
+<div class="charts-grid">
+  <div class="chart-card">
+    <div class="chart-header">
+      <div class="chart-title">Views & Listens Over Time</div>
+      <div class="chart-legend">
+        <div class="legend-item"><div class="legend-dot" style="background:var(--yt)"></div>YouTube</div>
+        <div class="legend-item"><div class="legend-dot" style="background:var(--sc)"></div>Simplecast</div>
+      </div>
+    </div>
+    <div class="chart-wrap"><div class="empty-state" id="views-empty">AWAITING CONNECTION</div><canvas id="views-chart" style="display:none"></canvas></div>
+  </div>
+  <div class="chart-card">
+    <div class="chart-header">
+      <div class="chart-title">Subscriber Growth</div>
+    </div>
+    <div class="chart-wrap"><div class="empty-state" id="subs-empty">AWAITING CONNECTION</div><canvas id="subs-chart" style="display:none"></canvas></div>
+  </div>
+</div>
+
+<!-- Top Episodes -->
+<div class="table-section">
+  <div class="table-card">
+    <div class="chart-header">
+      <div class="chart-title">Top Performing Episodes</div>
+      <div class="chart-legend">
+        <div class="legend-item"><div class="legend-dot" style="background:var(--yt)"></div>YouTube</div>
+        <div class="legend-item"><div class="legend-dot" style="background:var(--sc)"></div>Simplecast</div>
+      </div>
+    </div>
+    <div id="episodes-table-wrap">
+      <div class="empty-state" style="height:200px">AWAITING CONNECTION</div>
+    </div>
+  </div>
+</div>
+
+<script>
+// ─── State ───────────────────────────────────────────────
+let state = {
+  ytApiKey: '', ytClientId: '', scToken: '',
+  accessToken: null, channelId: null, scPodcastId: null,
+  range: 90, ytConnected: false, scConnected: false,
+  charts: {}
+};
+
+// ─── Range ───────────────────────────────────────────────
+function setRange(days) {
+  state.range = days;
+  document.querySelectorAll('.range-tab').forEach(t => t.classList.remove('active'));
+  document.getElementById('tab-' + days).classList.add('active');
+  if (state.ytConnected || state.scConnected) loadData();
+}
+
+// ─── Init ─────────────────────────────────────────────────
+async function initDashboard() {
+  state.ytApiKey = document.getElementById('yt-api-key').value.trim();
+  state.ytClientId = document.getElementById('yt-client-id').value.trim();
+  state.scToken = document.getElementById('sc-token').value.trim();
+
+  setStatus('Connecting...', '');
+
+  if (!state.ytApiKey && !state.scToken) {
+    setStatus('Please enter at least one API credential.', 'err');
+    return;
+  }
+
+  if (state.scToken) await connectSimplecast();
+  if (state.ytApiKey) await connectYouTubeBasic();
+
+  // Show OAuth step if Client ID provided
+  if (state.ytClientId) {
+    document.getElementById('oauth-step').style.display = 'block';
+    setStatus('Simplecast connected. Now authorize YouTube Analytics below.', 'ok');
+  }
+
+  updateBadges();
+  document.getElementById('toggle-creds-btn').style.display = 'block';
+}
+
+// ─── OAuth: Open Google Auth ──────────────────────────────
+function openGoogleAuth() {
+  const scopes = [
+    'https://www.googleapis.com/auth/youtube.readonly',
+    'https://www.googleapis.com/auth/yt-analytics.readonly'
+  ].join(' ');
+
+  // Use urn:ietf:wg:oauth:2.0:oob redirect — works from file:/// 
+  const params = new URLSearchParams({
+    client_id: state.ytClientId,
+    redirect_uri: 'urn:ietf:wg:oauth:2.0:oob',
+    response_type: 'code',
+    scope: scopes,
+    access_type: 'offline'
+  });
+
+  window.open('https://accounts.google.com/o/oauth2/v2/auth?' + params, '_blank');
+  document.getElementById('oauth-step-status').textContent = 'Google login opened in a new tab. After approving, copy the code shown and paste it above.';
+}
+
+// ─── OAuth: Submit Code ───────────────────────────────────
+async function submitOAuthCode() {
+  const input = document.getElementById('oauth-code-input').value.trim();
+  if (!input) {
+    document.getElementById('oauth-step-status').textContent = 'Please paste the code from Google first.';
+    return;
+  }
+
+  // Extract code whether they pasted full URL or just the code
+  let code = input;
+  if (input.includes('code=')) {
+    const match = input.match(/[?&]code=([^&]+)/);
+    if (match) code = decodeURIComponent(match[1]);
+  }
+
+  document.getElementById('oauth-step-status').textContent = 'Exchanging code for access token...';
+
+  try {
+    const res = await fetch('https://oauth2.googleapis.com/token', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+      body: new URLSearchParams({
+        code,
+        client_id: state.ytClientId,
+        redirect_uri: 'urn:ietf:wg:oauth:2.0:oob',
+        grant_type: 'authorization_code'
+      })
+    });
+
+    const data = await res.json();
+
+    if (data.error) throw new Error(data.error_description || data.error);
+    state.accessToken = data.access_token;
+
+    document.getElementById('oauth-step-status').textContent = '✓ Authorized! Loading YouTube Analytics...';
+    document.getElementById('oauth-step').style.display = 'none';
+    toggleCreds(false);
+
+    await connectYouTubeAnalytics();
+    updateBadges();
+    await loadData();
+  } catch(e) {
+    document.getElementById('oauth-step-status').textContent = 'Error: ' + e.message + '. Please try again.';
+  }
+}
+
+// ─── YouTube Basic (API Key only) ─────────────────────────
+async function connectYouTubeBasic() {
+  try {
+    const res = await fetch(`https://www.googleapis.com/youtube/v3/channels?part=statistics,snippet&mine=true&key=${state.ytApiKey}`);
+    if (!res.ok) throw new Error();
+    const data = await res.json();
+    if (!data.items?.length) throw new Error();
+    const ch = data.items[0];
+    state.channelId = ch.id;
+    state.ytConnected = true;
+    const subs = parseInt(ch.statistics.subscriberCount || 0);
+    document.getElementById('stat-subs').textContent = fmt(subs);
+    document.getElementById('stat-subs-sub').textContent = 'Total subscribers';
+    await loadYTVideos();
+  } catch {
+    setStatus('YouTube API key error. Check your key and try again.', 'err');
+  }
+}
+
+// ─── YouTube Analytics (OAuth) ────────────────────────────
+async function connectYouTubeAnalytics() {
+  try {
+    const chRes = await fetch('https://www.googleapis.com/youtube/v3/channels?part=statistics,snippet&mine=true', {
+      headers: { Authorization: `Bearer ${state.accessToken}` }
+    });
+    const chData = await chRes.json();
+    if (!chData.items?.length) throw new Error('No channel found');
+    const ch = chData.items[0];
+    state.channelId = ch.id;
+    state.ytConnected = true;
+    const subs = parseInt(ch.statistics.subscriberCount || 0);
+    document.getElementById('stat-subs').textContent = fmt(subs);
+    document.getElementById('stat-subs-sub').textContent = 'Total subscribers';
+    setStatus('YouTube & Simplecast connected.', 'ok');
+  } catch(e) {
+    setStatus('YouTube Analytics error: ' + e.message, 'err');
+  }
+}
+
+// ─── Simplecast ───────────────────────────────────────────
+async function connectSimplecast() {
+  try {
+    const res = await fetch('https://api.simplecast.com/podcasts', {
+      headers: { Authorization: `Bearer ${state.scToken}` }
+    });
+    if (!res.ok) throw new Error('Invalid token');
+    const data = await res.json();
+    if (!data.collection?.length) throw new Error('No podcasts found');
+    state.scPodcastId = data.collection[0].id;
+    state.scConnected = true;
+
+    // Get episode count
+    const epRes = await fetch(`https://api.simplecast.com/podcasts/${state.scPodcastId}/episodes?limit=1`, {
+      headers: { Authorization: `Bearer ${state.scToken}` }
+    });
+    const epData = await epRes.json();
+    document.getElementById('stat-episodes').textContent = fmt(epData.total_count || 0);
+    document.getElementById('stat-episodes-sub').textContent = 'Published episodes';
+
+    setStatus('Simplecast connected.', 'ok');
+    await loadSimplecastData();
+  } catch(e) {
+    setStatus('Simplecast error: ' + e.message, 'err');
+  }
+}
+
+// ─── Load All Data ────────────────────────────────────────
+async function loadData() {
+  if (state.ytConnected && state.accessToken) await loadYTAnalytics();
+  if (state.ytConnected) await loadYTVideos();
+  if (state.scConnected) await loadSimplecastData();
+  document.getElementById('last-updated').textContent = 'Updated ' + new Date().toLocaleTimeString();
+  combineCharts();
+}
+
+// ─── YouTube Analytics Data ───────────────────────────────
+async function loadYTAnalytics() {
+  const endDate = new Date().toISOString().split('T')[0];
+  const startDate = new Date(Date.now() - state.range * 86400000).toISOString().split('T')[0];
+
+  try {
+    const res = await fetch(
+      `https://youtubeanalytics.googleapis.com/v2/reports?ids=channel==MINE&startDate=${startDate}&endDate=${endDate}&metrics=views,subscribersGained&dimensions=day&sort=day`,
+      { headers: { Authorization: `Bearer ${state.accessToken}` } }
+    );
+    const data = await res.json();
+    if (!data.rows) return;
+
+    const labels = data.rows.map(r => r[0]);
+    const views = data.rows.map(r => r[1]);
+    const subsGained = data.rows.map(r => r[2]);
+
+    state.ytChartData = { labels, views, subsGained };
+    renderViewsChart();
+    renderSubsChart();
+
+    const totalViews = views.reduce((a, b) => a + b, 0);
+    document.getElementById('stat-total').textContent = fmt(totalViews + (state.scTotalListens || 0));
+  } catch(e) {
+    console.error('YT Analytics error', e);
+  }
+}
+
+// ─── YouTube Videos ───────────────────────────────────────
+async function loadYTVideos() {
+  if (!state.channelId) return;
+  try {
+    const headers = state.accessToken
+      ? { Authorization: `Bearer ${state.accessToken}` }
+      : {};
+    const url = state.accessToken
+      ? `https://www.googleapis.com/youtube/v3/search?part=snippet&channelId=${state.channelId}&maxResults=10&order=viewCount&type=video`
+      : `https://www.googleapis.com/youtube/v3/search?part=snippet&channelId=${state.channelId}&maxResults=10&order=viewCount&type=video&key=${state.ytApiKey}`;
+
+    const res = await fetch(url, { headers });
+    const data = await res.json();
+    if (!data.items) return;
+
+    const videoIds = data.items.map(i => i.id.videoId).join(',');
+    const statsUrl = state.accessToken
+      ? `https://www.googleapis.com/youtube/v3/videos?part=statistics,snippet&id=${videoIds}`
+      : `https://www.googleapis.com/youtube/v3/videos?part=statistics,snippet&id=${videoIds}&key=${state.ytApiKey}`;
+
+    const statsRes = await fetch(statsUrl, { headers });
+    const statsData = await statsRes.json();
+
+    state.ytVideos = (statsData.items || []).map(v => ({
+      title: v.snippet.title,
+      views: parseInt(v.statistics.viewCount || 0),
+      platform: 'yt'
+    })).sort((a, b) => b.views - a.views);
+
+    renderEpisodesTable();
+  } catch(e) { console.error('YT Videos error', e); }
+}
+
+// ─── Simplecast Data ──────────────────────────────────────
+async function loadSimplecastData() {
+  if (!state.scPodcastId) return;
+  try {
+    // Episodes
+    const epRes = await fetch(`https://api.simplecast.com/podcasts/${state.scPodcastId}/episodes?limit=10`, {
+      headers: { Authorization: `Bearer ${state.scToken}` }
+    });
+    const epData = await epRes.json();
+
+    if (epData.collection) {
+      state.scEpisodes = epData.collection.map(ep => ({
+        title: ep.title,
+        views: ep.downloads?.total || 0,
+        platform: 'sc'
+      })).sort((a, b) => b.views - a.views);
+
+      const totalListens = state.scEpisodes.reduce((a, ep) => a + ep.views, 0);
+      state.scTotalListens = totalListens;
+      document.getElementById('stat-listeners').textContent = fmt(totalListens);
+      document.getElementById('stat-listeners-sub').textContent = 'Total downloads';
+      renderEpisodesTable();
+    }
+
+    // Analytics over time (Simplecast analytics endpoint)
+    const endDate = new Date().toISOString().split('T')[0];
+    const startDate = new Date(Date.now() - state.range * 86400000).toISOString().split('T')[0];
+
+    const analyticsRes = await fetch(
+      `https://api.simplecast.com/analytics/technology?podcast=${state.scPodcastId}&start_date=${startDate}&end_date=${endDate}&limit=100`,
+      { headers: { Authorization: `Bearer ${state.scToken}` } }
+    );
+    const analyticsData = await analyticsRes.json();
+
+    if (analyticsData.by_interval) {
+      state.scChartData = {
+        labels: analyticsData.by_interval.map(d => d.interval),
+        listens: analyticsData.by_interval.map(d => d.downloads || 0)
+      };
+      renderViewsChart();
+    }
+  } catch(e) { console.error('Simplecast error', e); }
+}
+
+// ─── Chart Rendering ──────────────────────────────────────
+function renderViewsChart() {
+  const hasYT = state.ytChartData;
+  const hasSC = state.scChartData;
+  if (!hasYT && !hasSC) return;
+
+  document.getElementById('views-empty').style.display = 'none';
+  const canvas = document.getElementById('views-chart');
+  canvas.style.display = 'block';
+
+  if (state.charts.views) state.charts.views.destroy();
+
+  const labels = hasYT ? state.ytChartData.labels : state.scChartData.labels;
+  const datasets = [];
+
+  if (hasYT) datasets.push({
+    label: 'YouTube Views',
+    data: state.ytChartData.views,
+    borderColor: '#ff4444',
+    backgroundColor: 'rgba(255,68,68,0.08)',
+    fill: true,
+    tension: 0.4,
+    pointRadius: 0,
+    pointHoverRadius: 4,
+    borderWidth: 2
+  });
+
+  if (hasSC) datasets.push({
+    label: 'Simplecast Listens',
+    data: state.scChartData.listens,
+    borderColor: '#4a9eff',
+    backgroundColor: 'rgba(74,158,255,0.08)',
+    fill: true,
+    tension: 0.4,
+    pointRadius: 0,
+    pointHoverRadius: 4,
+    borderWidth: 2
+  });
+
+  state.charts.views = new Chart(canvas, {
+    type: 'line',
+    data: { labels, datasets },
+    options: chartOptions()
+  });
+}
+
+function renderSubsChart() {
+  if (!state.ytChartData) return;
+  document.getElementById('subs-empty').style.display = 'none';
+  const canvas = document.getElementById('subs-chart');
+  canvas.style.display = 'block';
+  if (state.charts.subs) state.charts.subs.destroy();
+
+  // Cumulative
+  let cum = 0;
+  const cumData = state.ytChartData.subsGained.map(v => (cum += v));
+
+  state.charts.subs = new Chart(canvas, {
+    type: 'line',
+    data: {
+      labels: state.ytChartData.labels,
+      datasets: [{
+        label: 'Subscribers Gained',
+        data: cumData,
+        borderColor: '#e8ff47',
+        backgroundColor: 'rgba(232,255,71,0.08)',
+        fill: true,
+        tension: 0.4,
+        pointRadius: 0,
+        pointHoverRadius: 4,
+        borderWidth: 2
+      }]
+    },
+    options: chartOptions()
+  });
+}
+
+function chartOptions() {
+  return {
+    responsive: true,
+    maintainAspectRatio: false,
+    interaction: { intersect: false, mode: 'index' },
+    plugins: {
+      legend: { display: false },
+      tooltip: {
+        backgroundColor: '#ffffff',
+        borderColor: '#dddddd',
+        borderWidth: 1,
+        titleColor: '#888888',
+        bodyColor: '#111111',
+        titleFont: { family: 'DM Mono', size: 11 },
+        bodyFont: { family: 'DM Mono', size: 12 },
+        padding: 12,
+        callbacks: {
+          label: ctx => ' ' + ctx.dataset.label + ': ' + fmt(ctx.raw)
+        }
+      }
+    },
+    scales: {
+      x: {
+        grid: { color: '#eeeeee' },
+        ticks: { color: '#999', font: { family: 'DM Mono', size: 10 }, maxTicksLimit: 8 },
+        border: { color: '#dddddd' }
+      },
+      y: {
+        grid: { color: '#eeeeee' },
+        ticks: { color: '#999', font: { family: 'DM Mono', size: 10 }, callback: v => fmt(v) },
+        border: { color: '#dddddd' }
+      }
+    }
+  };
+}
+
+// ─── Episodes Table ───────────────────────────────────────
+function renderEpisodesTable() {
+  const all = [
+    ...(state.ytVideos || []),
+    ...(state.scEpisodes || [])
+  ].sort((a, b) => b.views - a.views).slice(0, 10);
+
+  if (!all.length) return;
+  const max = all[0].views;
+
+  const wrap = document.getElementById('episodes-table-wrap');
+  wrap.innerHTML = `
+    <table>
+      <thead>
+        <tr>
+          <th>#</th>
+          <th>Episode Title</th>
+          <th>Platform</th>
+          <th>Views / Downloads</th>
+          <th style="width:140px">Performance</th>
+        </tr>
+      </thead>
+      <tbody>
+        ${all.map((ep, i) => `
+          <tr>
+            <td class="ep-rank">${String(i+1).padStart(2,'0')}</td>
+            <td class="ep-title">${ep.title}</td>
+            <td><span class="ep-platform ${ep.platform}">${ep.platform === 'yt' ? '▶ YouTube' : '🎙 Simplecast'}</span></td>
+            <td class="ep-views">${fmt(ep.views)}</td>
+            <td class="ep-bar-wrap">
+              <div class="ep-bar">
+                <div class="ep-bar-fill" style="width:${Math.round(ep.views/max*100)}%;background:${ep.platform==='yt'?'var(--yt)':'var(--sc)'}"></div>
+              </div>
+            </td>
+          </tr>
+        `).join('')}
+      </tbody>
+    </table>
+  `;
+}
+
+function combineCharts() {
+  const ytTotal = state.ytChartData?.views?.reduce((a, b) => a + b, 0) || 0;
+  const scTotal = state.scTotalListens || 0;
+  if (ytTotal || scTotal) {
+    document.getElementById('stat-total').textContent = fmt(ytTotal + scTotal);
+  }
+}
+
+// ─── Helpers ──────────────────────────────────────────────
+function fmt(n) {
+  if (n >= 1000000) return (n/1000000).toFixed(1) + 'M';
+  if (n >= 1000) return (n/1000).toFixed(1) + 'K';
+  return n?.toString() || '0';
+}
+
+function setStatus(msg, type) {
+  const el = document.getElementById('auth-status');
+  el.textContent = msg;
+  el.className = type;
+}
+
+function updateBadges() {
+  if (state.ytConnected) {
+    document.getElementById('yt-badge').classList.add('connected');
+    document.getElementById('yt-badge').innerHTML = '<span class="dot"></span> YouTube';
+  }
+  if (state.scConnected) {
+    document.getElementById('sc-badge').classList.add('connected');
+    document.getElementById('sc-badge').innerHTML = '<span class="dot"></span> Simplecast';
+  }
+}
+
+let credsVisible = true;
+function toggleCreds(show) {
+  const panel = document.getElementById('credentials-panel');
+  const btn = document.getElementById('toggle-creds-btn');
+  if (show === false || credsVisible) {
+    panel.style.display = 'none';
+    btn.textContent = '▼ Show credentials';
+    credsVisible = false;
+  } else {
+    panel.style.display = 'block';
+    btn.textContent = '▲ Hide credentials';
+    credsVisible = true;
+  }
+}
+
+// ─── Boot ──────────────────────────────────────────────────
+// Nothing to do on load — user initiates via the form
+</script>
+</body>
+</html>
