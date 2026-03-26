@@ -868,12 +868,15 @@ async function loadYTAnalytics() {
   const endDate = new Date().toISOString().split('T')[0];
   const startDate = new Date(Date.now() - state.range * 86400000).toISOString().split('T')[0];
 
+  const channelId = state.channelId || state.ytChannelId || 'UCq2ZnkIGhnu69Ci49byXwzg';
+
   try {
     const res = await fetch(
-      `https://youtubeanalytics.googleapis.com/v2/reports?ids=channel==MINE&startDate=${startDate}&endDate=${endDate}&metrics=views,subscribersGained&dimensions=day&sort=day`,
+      `https://youtubeanalytics.googleapis.com/v2/reports?ids=channel==${channelId}&startDate=${startDate}&endDate=${endDate}&metrics=views,subscribersGained&dimensions=day&sort=day`,
       { headers: { Authorization: `Bearer ${state.accessToken}` } }
     );
     const data = await res.json();
+    console.log('YT Analytics response:', JSON.stringify(data).substring(0, 300));
     if (!data.rows) return;
 
     const labels = data.rows.map(r => r[0]);
@@ -954,20 +957,21 @@ async function loadSimplecastData() {
       renderEpisodesTable();
     }
 
-    // Analytics over time (Simplecast analytics endpoint)
+    // Analytics over time — use podcast-level downloads endpoint
     const endDate = new Date().toISOString().split('T')[0];
     const startDate = new Date(Date.now() - state.range * 86400000).toISOString().split('T')[0];
 
     const analyticsRes = await fetch(
-      `https://api.simplecast.com/analytics/technology?podcast=${state.scPodcastId}&start_date=${startDate}&end_date=${endDate}&limit=100`,
+      `https://api.simplecast.com/analytics/downloads?podcast=${state.scPodcastId}&start_date=${startDate}&end_date=${endDate}`,
       { headers: { Authorization: `Bearer ${state.scToken}` } }
     );
     const analyticsData = await analyticsRes.json();
+    console.log('SC podcast analytics:', JSON.stringify(analyticsData).substring(0, 300));
 
     if (analyticsData.by_interval) {
       state.scChartData = {
         labels: analyticsData.by_interval.map(d => d.interval),
-        listens: analyticsData.by_interval.map(d => d.downloads || 0)
+        listens: analyticsData.by_interval.map(d => d.downloads_total || d.downloads || 0)
       };
       renderViewsChart();
     }
