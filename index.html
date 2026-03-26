@@ -979,24 +979,32 @@ async function loadSimplecastData() {
       renderEpisodeBarChart();
     }
 
-    // Top Countries — try multiple endpoint variations
-    let countriesData = null;
-    const countryEndpoints = [
-      `https://api.simplecast.com/analytics/location/country?podcast=${state.scPodcastId}`,
-      `https://api.simplecast.com/analytics/listeners?podcast=${state.scPodcastId}&by=country`,
-      `https://api.simplecast.com/analytics/geography?podcast=${state.scPodcastId}`,
-    ];
-    for (const endpoint of countryEndpoints) {
-      try {
-        const r = await fetch(endpoint, { headers: { Authorization: `Bearer ${state.scToken}` } });
-        if (r.ok) { countriesData = await r.json(); console.log('Countries data:', JSON.stringify(countriesData).substring(0, 400)); break; }
-        else { console.log('Country endpoint failed:', endpoint, r.status); }
-      } catch(e) { console.log('Country endpoint error:', endpoint, e.message); }
-    }
-    if (countriesData) {
-      const collection = countriesData.collection || countriesData.countries || countriesData.by_country || [];
-      if (collection.length) { state.scCountries = collection.slice(0, 10); renderCountriesTable(); }
-    }
+    // Top Countries — discover endpoint from podcast analytics href
+    try {
+      const podRes = await fetch(`https://api.simplecast.com/podcasts/${state.scPodcastId}`, {
+        headers: { Authorization: `Bearer ${state.scToken}` }
+      });
+      const podData = await podRes.json();
+      console.log('Podcast object (looking for analytics href):', JSON.stringify(podData).substring(0, 600));
+
+      // Try the analytics object href variations
+      const countryAttempts = [
+        `https://api.simplecast.com/analytics/listeners?podcast=${state.scPodcastId}&dimension=country`,
+        `https://api.simplecast.com/analytics/technology?podcast=${state.scPodcastId}&dimension=country`,
+        `https://api.simplecast.com/podcasts/${state.scPodcastId}/analytics/location`,
+        `https://api.simplecast.com/podcasts/${state.scPodcastId}/analytics/country`,
+      ];
+      for (const url of countryAttempts) {
+        const r = await fetch(url, { headers: { Authorization: `Bearer ${state.scToken}` } });
+        console.log(`Country attempt ${url}: ${r.status}`);
+        if (r.ok) {
+          const d = await r.json();
+          console.log('Country data found:', JSON.stringify(d).substring(0, 400));
+          const collection = d.collection || d.countries || d.by_country || d.items || [];
+          if (collection.length) { state.scCountries = collection.slice(0, 10); renderCountriesTable(); break; }
+        }
+      }
+    } catch(e) { console.log('Country discovery error:', e.message); }
 
     // Analytics over time
     const endDate = new Date().toISOString().split('T')[0];
