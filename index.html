@@ -979,27 +979,28 @@ async function loadSimplecastData() {
       renderEpisodeBarChart();
     }
 
-    // Top Countries — discover endpoint from podcast analytics href
+    // Top Countries — explore technology sub-endpoints and dedicated country endpoints
     try {
-      const podRes = await fetch(`https://api.simplecast.com/podcasts/${state.scPodcastId}`, {
+      // First get the full technology object to see all sub-hrefs
+      const techRes = await fetch(`https://api.simplecast.com/analytics/technology?podcast=${state.scPodcastId}`, {
         headers: { Authorization: `Bearer ${state.scToken}` }
       });
-      const podData = await podRes.json();
-      console.log('Podcast object (looking for analytics href):', JSON.stringify(podData).substring(0, 600));
+      const techData = await techRes.json();
+      console.log('Full technology object:', JSON.stringify(techData));
 
-      // Try the analytics object href variations
+      // Try the dedicated country sub-endpoints
       const countryAttempts = [
-        `https://api.simplecast.com/analytics/listeners?podcast=${state.scPodcastId}&dimension=country`,
-        `https://api.simplecast.com/analytics/technology?podcast=${state.scPodcastId}&dimension=country`,
-        `https://api.simplecast.com/podcasts/${state.scPodcastId}/analytics/location`,
-        `https://api.simplecast.com/podcasts/${state.scPodcastId}/analytics/country`,
+        `https://api.simplecast.com/analytics/technology/countries?podcast=${state.scPodcastId}`,
+        `https://api.simplecast.com/analytics/technology/country?podcast=${state.scPodcastId}`,
+        `https://api.simplecast.com/analytics/location?podcast=${state.scPodcastId}`,
+        `https://api.simplecast.com/analytics/locations?podcast=${state.scPodcastId}`,
       ];
       for (const url of countryAttempts) {
         const r = await fetch(url, { headers: { Authorization: `Bearer ${state.scToken}` } });
-        console.log(`Country attempt ${url}: ${r.status}`);
+        console.log(`Country sub-attempt ${url}: ${r.status}`);
         if (r.ok) {
           const d = await r.json();
-          console.log('Country data found:', JSON.stringify(d).substring(0, 400));
+          console.log('Country sub-data:', JSON.stringify(d).substring(0, 600));
           const collection = d.collection || d.countries || d.by_country || d.items || [];
           if (collection.length) { state.scCountries = collection.slice(0, 10); renderCountriesTable(); break; }
         }
