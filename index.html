@@ -979,15 +979,23 @@ async function loadSimplecastData() {
       renderEpisodeBarChart();
     }
 
-    // Top Countries
-    const countriesRes = await fetch(
+    // Top Countries — try multiple endpoint variations
+    let countriesData = null;
+    const countryEndpoints = [
       `https://api.simplecast.com/analytics/location/country?podcast=${state.scPodcastId}`,
-      { headers: { Authorization: `Bearer ${state.scToken}` } }
-    );
-    const countriesData = await countriesRes.json();
-    if (countriesData.collection) {
-      state.scCountries = countriesData.collection.slice(0, 10);
-      renderCountriesTable();
+      `https://api.simplecast.com/analytics/listeners?podcast=${state.scPodcastId}&by=country`,
+      `https://api.simplecast.com/analytics/geography?podcast=${state.scPodcastId}`,
+    ];
+    for (const endpoint of countryEndpoints) {
+      try {
+        const r = await fetch(endpoint, { headers: { Authorization: `Bearer ${state.scToken}` } });
+        if (r.ok) { countriesData = await r.json(); console.log('Countries data:', JSON.stringify(countriesData).substring(0, 400)); break; }
+        else { console.log('Country endpoint failed:', endpoint, r.status); }
+      } catch(e) { console.log('Country endpoint error:', endpoint, e.message); }
+    }
+    if (countriesData) {
+      const collection = countriesData.collection || countriesData.countries || countriesData.by_country || [];
+      if (collection.length) { state.scCountries = collection.slice(0, 10); renderCountriesTable(); }
     }
 
     // Analytics over time
