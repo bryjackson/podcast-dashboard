@@ -626,7 +626,7 @@
 
 <!-- Charts -->
 <div class="charts-grid">
-  <div class="chart-card">
+  <div class="chart-card full">
     <div class="chart-header">
       <div class="chart-title">Views & Listens Over Time</div>
       <div class="chart-legend">
@@ -636,11 +636,31 @@
     </div>
     <div class="chart-wrap"><div class="empty-state" id="views-empty">AWAITING CONNECTION</div><canvas id="views-chart" style="display:none"></canvas></div>
   </div>
-  <div class="chart-card">
+</div>
+
+<!-- Episode Bar Chart -->
+<div class="table-section" style="margin-bottom:1px">
+  <div class="table-card">
     <div class="chart-header">
-      <div class="chart-title">Subscriber Growth</div>
+      <div class="chart-title">Episode Performance</div>
+      <div class="chart-legend">
+        <div class="legend-item"><div class="legend-dot" style="background:var(--yt)"></div>YouTube Views</div>
+        <div class="legend-item"><div class="legend-dot" style="background:var(--sc)"></div>Simplecast Downloads</div>
+      </div>
     </div>
-    <div class="chart-wrap"><div class="empty-state" id="subs-empty">AWAITING CONNECTION</div><canvas id="subs-chart" style="display:none"></canvas></div>
+    <div class="chart-wrap" style="height:320px"><div class="empty-state" id="epbar-empty">AWAITING CONNECTION</div><canvas id="epbar-chart" style="display:none"></canvas></div>
+  </div>
+</div>
+
+<!-- All Episodes Table -->
+<div class="table-section" style="margin-bottom:1px">
+  <div class="table-card">
+    <div class="chart-header">
+      <div class="chart-title">Episodes</div>
+    </div>
+    <div id="all-episodes-table-wrap">
+      <div class="empty-state" style="height:200px">AWAITING CONNECTION</div>
+    </div>
   </div>
 </div>
 
@@ -649,10 +669,6 @@
   <div class="table-card">
     <div class="chart-header">
       <div class="chart-title">Top Performing Episodes</div>
-      <div class="chart-legend">
-        <div class="legend-item"><div class="legend-dot" style="background:var(--yt)"></div>YouTube</div>
-        <div class="legend-item"><div class="legend-dot" style="background:var(--sc)"></div>Simplecast</div>
-      </div>
     </div>
     <div id="episodes-table-wrap">
       <div class="empty-state" style="height:200px">AWAITING CONNECTION</div>
@@ -838,15 +854,6 @@ async function connectSimplecast() {
     if (!data.collection?.length) throw new Error('No podcasts found');
     state.scPodcastId = data.collection[0].id;
     state.scConnected = true;
-
-    // Get episode count
-    const epRes = await fetch(`https://api.simplecast.com/podcasts/${state.scPodcastId}/episodes?limit=1`, {
-      headers: { Authorization: `Bearer ${state.scToken}` }
-    });
-    const epData = await epRes.json();
-    document.getElementById('stat-episodes').textContent = fmt(epData.total_count || 0);
-    document.getElementById('stat-episodes-sub').textContent = 'Published episodes';
-
     setStatus('Simplecast connected.', 'ok');
     await loadSimplecastData();
   } catch(e) {
@@ -885,7 +892,6 @@ async function loadYTAnalytics() {
 
     state.ytChartData = { labels, views, subsGained };
     renderViewsChart();
-    renderSubsChart();
 
     const totalViews = views.reduce((a, b) => a + b, 0);
     document.getElementById('stat-total').textContent = fmt(totalViews + (state.scTotalListens || 0));
@@ -900,7 +906,7 @@ async function loadYTVideos() {
   if (!channelId) return;
   try {
     const headers = state.accessToken ? { Authorization: `Bearer ${state.accessToken}` } : {};
-    const url = `https://www.googleapis.com/youtube/v3/search?part=snippet&channelId=${channelId}&maxResults=10&order=viewCount&type=video&key=${state.ytApiKey}`;
+    const url = `https://www.googleapis.com/youtube/v3/search?part=snippet&channelId=${channelId}&maxResults=50&order=date&type=video&key=${state.ytApiKey}`;
 
     const res = await fetch(url, { headers });
     const data = await res.json();
@@ -913,11 +919,20 @@ async function loadYTVideos() {
 
     state.ytVideos = (statsData.items || []).map(v => ({
       title: v.snippet.title,
+      ytViews: parseInt(v.statistics.viewCount || 0),
       views: parseInt(v.statistics.viewCount || 0),
       platform: 'yt'
-    })).sort((a, b) => b.views - a.views);
+    }));
+
+    // Update episode count if SC hasn't set it yet
+    if (document.getElementById('stat-episodes').textContent === '—') {
+      document.getElementById('stat-episodes').textContent = fmt(state.ytVideos.length);
+      document.getElementById('stat-episodes-sub').textContent = 'Published episodes';
+    }
 
     renderEpisodesTable();
+    renderAllEpisodesTable();
+    renderEpisodeBarChart();
   } catch(e) { console.error('YT Videos error:', e); }
 }
 
@@ -925,39 +940,42 @@ async function loadYTVideos() {
 async function loadSimplecastData() {
   if (!state.scPodcastId) return;
   try {
-    // Episodes
-    const epRes = await fetch(`https://api.simplecast.com/podcasts/${state.scPodcastId}/episodes?limit=10`, {
+    // Fetch all episodes (up to 100)
+    const epRes = await fetch(`https://api.simplecast.com/podcasts/${state.scPodcastId}/episodes?limit=100`, {
       headers: { Authorization: `Bearer ${state.scToken}` }
     });
     const epData = await epRes.json();
 
     if (epData.collection) {
-      console.log('SC first episode sample:', JSON.stringify(epData.collection[0]));
+      // Update episode count stat
+      document.getElementById('stat-episodes').textContent = fmt(epData.collection.length);
+      document.getElementById('stat-episodes-sub').textContent = 'Published episodes';
 
-      // Fetch download counts for each episode from analytics endpoint
+      // Fetch download counts for each episode
       const episodesWithDownloads = await Promise.all(epData.collection.map(async ep => {
         try {
           const dlRes = await fetch(`https://api.simplecast.com/analytics/downloads?episode=${ep.id}&podcast=${state.scPodcastId}`, {
             headers: { Authorization: `Bearer ${state.scToken}` }
           });
           const dlData = await dlRes.json();
-          console.log(`SC downloads for "${ep.title}":`, JSON.stringify(dlData));
-          const downloads = dlData.total || dlData.downloads_total || dlData.count || 0;
-          return { title: ep.title, views: downloads, platform: 'sc' };
+          const downloads = dlData.total || 0;
+          return { title: ep.title, scViews: downloads, views: downloads, platform: 'sc' };
         } catch {
-          return { title: ep.title, views: 0, platform: 'sc' };
+          return { title: ep.title, scViews: 0, views: 0, platform: 'sc' };
         }
       }));
 
-      state.scEpisodes = episodesWithDownloads.sort((a, b) => b.views - a.views);
-      const totalListens = state.scEpisodes.reduce((a, ep) => a + ep.views, 0);
+      state.scEpisodes = episodesWithDownloads;
+      const totalListens = state.scEpisodes.reduce((a, ep) => a + ep.scViews, 0);
       state.scTotalListens = totalListens;
       document.getElementById('stat-listeners').textContent = fmt(totalListens);
       document.getElementById('stat-listeners-sub').textContent = 'Total downloads';
       renderEpisodesTable();
+      renderAllEpisodesTable();
+      renderEpisodeBarChart();
     }
 
-    // Analytics over time — use podcast-level downloads endpoint
+    // Analytics over time
     const endDate = new Date().toISOString().split('T')[0];
     const startDate = new Date(Date.now() - state.range * 86400000).toISOString().split('T')[0];
 
@@ -966,7 +984,6 @@ async function loadSimplecastData() {
       { headers: { Authorization: `Bearer ${state.scToken}` } }
     );
     const analyticsData = await analyticsRes.json();
-    console.log('SC podcast analytics:', JSON.stringify(analyticsData).substring(0, 300));
 
     if (analyticsData.by_interval) {
       state.scChartData = {
@@ -1024,36 +1041,6 @@ function renderViewsChart() {
   });
 }
 
-function renderSubsChart() {
-  if (!state.ytChartData) return;
-  document.getElementById('subs-empty').style.display = 'none';
-  const canvas = document.getElementById('subs-chart');
-  canvas.style.display = 'block';
-  if (state.charts.subs) state.charts.subs.destroy();
-
-  // Cumulative
-  let cum = 0;
-  const cumData = state.ytChartData.subsGained.map(v => (cum += v));
-
-  state.charts.subs = new Chart(canvas, {
-    type: 'line',
-    data: {
-      labels: state.ytChartData.labels,
-      datasets: [{
-        label: 'Subscribers Gained',
-        data: cumData,
-        borderColor: '#e8ff47',
-        backgroundColor: 'rgba(232,255,71,0.08)',
-        fill: true,
-        tension: 0.4,
-        pointRadius: 0,
-        pointHoverRadius: 4,
-        borderWidth: 2
-      }]
-    },
-    options: chartOptions()
-  });
-}
 
 function chartOptions() {
   return {
@@ -1091,15 +1078,88 @@ function chartOptions() {
   };
 }
 
-// ─── Episodes Table ───────────────────────────────────────
-function renderEpisodesTable() {
-  const all = [
-    ...(state.ytVideos || []),
-    ...(state.scEpisodes || [])
-  ].sort((a, b) => b.views - a.views).slice(0, 10);
+// ─── Helper: extract S#E# from title ─────────────────────
+function extractEpCode(title) {
+  const match = title.match(/S(\d+)E(\d+)/i);
+  if (match) return `S${match[1]}E${match[2]}`;
+  const trailer = title.match(/trailer/i);
+  if (trailer) return 'TRL';
+  return '—';
+}
 
-  if (!all.length) return;
-  const max = all[0].views;
+// ─── Helper: match SC and YT episodes by title ────────────
+function mergeEpisodes() {
+  const scEps = state.scEpisodes || [];
+  const ytEps = state.ytVideos || [];
+
+  // Build a merged list keyed by episode code or normalized title
+  const merged = [];
+
+  scEps.forEach(sc => {
+    const code = extractEpCode(sc.title);
+    // Try to find matching YT video by episode code
+    const yt = ytEps.find(v => extractEpCode(v.title) === code && code !== '—') ||
+                ytEps.find(v => v.title.toLowerCase().includes(sc.title.toLowerCase().substring(0, 15)));
+    merged.push({
+      title: sc.title,
+      code,
+      scViews: sc.scViews || 0,
+      ytViews: yt ? (yt.ytViews || 0) : 0,
+      total: (sc.scViews || 0) + (yt ? (yt.ytViews || 0) : 0)
+    });
+  });
+
+  // Add any YT videos not matched to SC
+  ytEps.forEach(yt => {
+    const code = extractEpCode(yt.title);
+    const already = merged.find(m => m.code === code && code !== '—') ||
+                    merged.find(m => yt.title.toLowerCase().includes(m.title.toLowerCase().substring(0, 15)));
+    if (!already) {
+      merged.push({ title: yt.title, code, scViews: 0, ytViews: yt.ytViews || 0, total: yt.ytViews || 0 });
+    }
+  });
+
+  return merged;
+}
+
+// ─── All Episodes Table ───────────────────────────────────
+function renderAllEpisodesTable() {
+  if (!state.scEpisodes?.length && !state.ytVideos?.length) return;
+  const episodes = mergeEpisodes();
+  if (!episodes.length) return;
+
+  const wrap = document.getElementById('all-episodes-table-wrap');
+  wrap.innerHTML = `
+    <table>
+      <thead>
+        <tr>
+          <th style="width:60px">Ep</th>
+          <th>Episode Title</th>
+          <th style="text-align:right">YT Views</th>
+          <th style="text-align:right">SC Downloads</th>
+          <th style="text-align:right">Total</th>
+        </tr>
+      </thead>
+      <tbody>
+        ${episodes.map(ep => `
+          <tr>
+            <td class="ep-rank" style="font-size:16px">${ep.code}</td>
+            <td class="ep-title">${ep.title}</td>
+            <td class="ep-views" style="text-align:right;color:var(--yt)">${ep.ytViews > 0 ? fmt(ep.ytViews) : '—'}</td>
+            <td class="ep-views" style="text-align:right;color:var(--sc)">${ep.scViews > 0 ? fmt(ep.scViews) : '—'}</td>
+            <td class="ep-views" style="text-align:right;font-weight:600">${fmt(ep.total)}</td>
+          </tr>
+        `).join('')}
+      </tbody>
+    </table>
+  `;
+}
+
+// ─── Top Episodes Table ───────────────────────────────────
+function renderEpisodesTable() {
+  if (!state.scEpisodes?.length && !state.ytVideos?.length) return;
+  const episodes = mergeEpisodes().sort((a, b) => b.total - a.total).slice(0, 10);
+  if (!episodes.length) return;
 
   const wrap = document.getElementById('episodes-table-wrap');
   wrap.innerHTML = `
@@ -1108,28 +1168,87 @@ function renderEpisodesTable() {
         <tr>
           <th>#</th>
           <th>Episode Title</th>
-          <th>Platform</th>
-          <th>Views / Downloads</th>
-          <th style="width:140px">Performance</th>
+          <th style="text-align:right">Total Views / Downloads</th>
         </tr>
       </thead>
       <tbody>
-        ${all.map((ep, i) => `
+        ${episodes.map((ep, i) => `
           <tr>
             <td class="ep-rank">${String(i+1).padStart(2,'0')}</td>
             <td class="ep-title">${ep.title}</td>
-            <td><span class="ep-platform ${ep.platform}">${ep.platform === 'yt' ? '▶ YouTube' : '🎙 Simplecast'}</span></td>
-            <td class="ep-views">${fmt(ep.views)}</td>
-            <td class="ep-bar-wrap">
-              <div class="ep-bar">
-                <div class="ep-bar-fill" style="width:${Math.round(ep.views/max*100)}%;background:${ep.platform==='yt'?'var(--yt)':'var(--sc)'}"></div>
-              </div>
-            </td>
+            <td class="ep-views" style="text-align:right">${fmt(ep.total)}</td>
           </tr>
         `).join('')}
       </tbody>
     </table>
   `;
+}
+
+// ─── Episode Bar Chart ────────────────────────────────────
+function renderEpisodeBarChart() {
+  if (!state.scEpisodes?.length && !state.ytVideos?.length) return;
+  const episodes = mergeEpisodes().reverse(); // oldest first for chart
+
+  document.getElementById('epbar-empty').style.display = 'none';
+  const canvas = document.getElementById('epbar-chart');
+  canvas.style.display = 'block';
+  if (state.charts.epbar) state.charts.epbar.destroy();
+
+  const labels = episodes.map(ep => ep.code !== '—' ? ep.code : ep.title.substring(0, 12));
+
+  state.charts.epbar = new Chart(canvas, {
+    type: 'bar',
+    data: {
+      labels,
+      datasets: [
+        {
+          label: 'YouTube Views',
+          data: episodes.map(ep => ep.ytViews),
+          backgroundColor: 'rgba(204,0,0,0.75)',
+          borderRadius: 2
+        },
+        {
+          label: 'Simplecast Downloads',
+          data: episodes.map(ep => ep.scViews),
+          backgroundColor: 'rgba(26,110,199,0.75)',
+          borderRadius: 2
+        }
+      ]
+    },
+    options: {
+      responsive: true,
+      maintainAspectRatio: false,
+      interaction: { intersect: false, mode: 'index' },
+      plugins: {
+        legend: { display: false },
+        tooltip: {
+          backgroundColor: '#ffffff',
+          borderColor: '#dddddd',
+          borderWidth: 1,
+          titleColor: '#888888',
+          bodyColor: '#111111',
+          titleFont: { family: 'DM Mono', size: 11 },
+          bodyFont: { family: 'DM Mono', size: 12 },
+          padding: 12,
+          callbacks: { label: ctx => ' ' + ctx.dataset.label + ': ' + fmt(ctx.raw) }
+        }
+      },
+      scales: {
+        x: {
+          stacked: false,
+          grid: { color: '#eeeeee' },
+          ticks: { color: '#999', font: { family: 'DM Mono', size: 10 } },
+          border: { color: '#dddddd' }
+        },
+        y: {
+          stacked: false,
+          grid: { color: '#eeeeee' },
+          ticks: { color: '#999', font: { family: 'DM Mono', size: 10 }, callback: v => fmt(v) },
+          border: { color: '#dddddd' }
+        }
+      }
+    }
+  });
 }
 
 function combineCharts() {
