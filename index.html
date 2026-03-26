@@ -249,7 +249,7 @@
     display: grid;
     grid-template-columns: repeat(4, 1fr);
     gap: 1px;
-    margin: 0 48px 32px;
+    margin: 32px 48px 0;
     background: var(--border);
     border: 1px solid var(--border);
   }
@@ -590,16 +590,6 @@
 
 <button class="toggle-creds" id="toggle-creds-btn" style="display:none" onclick="toggleCreds()">▲ Hide credentials</button>
 
-<!-- Controls -->
-<div class="controls-bar">
-  <div class="range-tabs">
-    <button class="range-tab" onclick="setRange(28)" id="tab-28">28D</button>
-    <button class="range-tab active" onclick="setRange(90)" id="tab-90">90D</button>
-    <button class="range-tab" onclick="setRange(365)" id="tab-365">12M</button>
-  </div>
-  <span class="last-updated" id="last-updated">—</span>
-</div>
-
 <!-- Stats Row -->
 <div class="stats-row">
   <div class="stat-card yt">
@@ -624,24 +614,10 @@
   </div>
 </div>
 
-<!-- Charts -->
-<div class="charts-grid">
-  <div class="chart-card full">
-    <div class="chart-header">
-      <div class="chart-title">Views & Listens Over Time</div>
-      <div class="chart-legend">
-        <div class="legend-item"><div class="legend-dot" style="background:var(--yt)"></div>YouTube</div>
-        <div class="legend-item"><div class="legend-dot" style="background:var(--sc)"></div>Simplecast</div>
-      </div>
-    </div>
-    <div class="chart-wrap"><div class="empty-state" id="views-empty">AWAITING CONNECTION</div><canvas id="views-chart" style="display:none"></canvas></div>
-  </div>
-</div>
+<!-- Row 1: Episode Performance + Episodes -->
+<div style="display:grid; grid-template-columns:1fr 1fr; gap:1px; margin:32px 48px 0; background:var(--border); border:1px solid var(--border);">
 
-<!-- Bottom sections: two-column layout -->
-<div style="display:grid; grid-template-columns:1fr 1fr; gap:1px; margin:0 48px 1px; background:var(--border);">
-
-  <!-- Left column: Episode Performance bar chart -->
+  <!-- Left: Episode Performance bar chart -->
   <div class="table-card">
     <div class="chart-header">
       <div class="chart-title">Episode Performance</div>
@@ -653,20 +629,22 @@
     <div class="chart-wrap" style="height:320px"><div class="empty-state" id="epbar-empty">AWAITING CONNECTION</div><canvas id="epbar-chart" style="display:none"></canvas></div>
   </div>
 
-  <!-- Right column: Episodes table -->
-  <div class="table-card" style="overflow-y:auto; max-height:400px;">
-    <div class="chart-header" style="position:sticky;top:0;background:var(--surface);z-index:1;padding-bottom:16px">
+  <!-- Right: Episodes table with solid sticky header -->
+  <div class="table-card" style="overflow:hidden; display:flex; flex-direction:column; max-height:400px;">
+    <div style="padding:28px 28px 14px; background:var(--surface); border-bottom:1px solid var(--border); flex-shrink:0;">
       <div class="chart-title">Episodes</div>
     </div>
-    <div id="all-episodes-table-wrap">
+    <div id="all-episodes-table-wrap" style="overflow-y:auto; flex:1; padding:0 0 16px;">
       <div class="empty-state" style="height:200px">AWAITING CONNECTION</div>
     </div>
   </div>
 
 </div>
 
-<!-- Top Performing Episodes — half width -->
-<div style="display:grid; grid-template-columns:1fr 1fr; gap:1px; margin:1px 48px 48px; background:var(--border);">
+<!-- Row 2: Top Performing Episodes + Top Countries -->
+<div style="display:grid; grid-template-columns:1fr 1fr; gap:1px; margin:32px 48px 0; background:var(--border); border:1px solid var(--border);">
+
+  <!-- Left: Top Performing Episodes -->
   <div class="table-card">
     <div class="chart-header">
       <div class="chart-title">Top Performing Episodes</div>
@@ -675,7 +653,32 @@
       <div class="empty-state" style="height:200px">AWAITING CONNECTION</div>
     </div>
   </div>
-  <div style="background:var(--bg)"></div>
+
+  <!-- Right: Top Countries -->
+  <div class="table-card">
+    <div class="chart-header">
+      <div class="chart-title">Top Countries</div>
+    </div>
+    <div id="countries-table-wrap">
+      <div class="empty-state" style="height:200px">AWAITING CONNECTION</div>
+    </div>
+  </div>
+
+</div>
+
+<!-- Row 3: Listens Over Time (full width) -->
+<div style="margin:32px 48px 48px; border:1px solid var(--border);">
+  <div class="table-card">
+    <div class="chart-header">
+      <div class="chart-title">Listens Over Time</div>
+      <div class="range-tabs">
+        <button class="range-tab" onclick="setRange(28)" id="tab-28">28D</button>
+        <button class="range-tab active" onclick="setRange(90)" id="tab-90">90D</button>
+        <button class="range-tab" onclick="setRange(365)" id="tab-365">12M</button>
+      </div>
+    </div>
+    <div class="chart-wrap"><div class="empty-state" id="views-empty">AWAITING CONNECTION</div><canvas id="views-chart" style="display:none"></canvas></div>
+  </div>
 </div>
 
 <script>
@@ -868,7 +871,6 @@ async function loadData() {
   if (state.ytConnected && state.accessToken) await loadYTAnalytics();
   if (state.ytConnected) await loadYTVideos();
   if (state.scConnected) await loadSimplecastData();
-  document.getElementById('last-updated').textContent = 'Updated ' + new Date().toLocaleTimeString();
   combineCharts();
 }
 
@@ -975,6 +977,17 @@ async function loadSimplecastData() {
       renderEpisodesTable();
       renderAllEpisodesTable();
       renderEpisodeBarChart();
+    }
+
+    // Top Countries
+    const countriesRes = await fetch(
+      `https://api.simplecast.com/analytics/location/country?podcast=${state.scPodcastId}`,
+      { headers: { Authorization: `Bearer ${state.scToken}` } }
+    );
+    const countriesData = await countriesRes.json();
+    if (countriesData.collection) {
+      state.scCountries = countriesData.collection.slice(0, 10);
+      renderCountriesTable();
     }
 
     // Analytics over time
@@ -1150,6 +1163,38 @@ function renderAllEpisodesTable() {
             <td class="ep-views" style="text-align:right;color:var(--yt)">${ep.ytViews > 0 ? fmt(ep.ytViews) : '—'}</td>
             <td class="ep-views" style="text-align:right;color:var(--sc)">${ep.scViews > 0 ? fmt(ep.scViews) : '—'}</td>
             <td class="ep-views" style="text-align:right;font-weight:600">${fmt(ep.total)}</td>
+          </tr>
+        `).join('')}
+      </tbody>
+    </table>
+  `;
+}
+
+// ─── Countries Table ──────────────────────────────────────
+function renderCountriesTable() {
+  const countries = state.scCountries || [];
+  if (!countries.length) return;
+
+  const wrap = document.getElementById('countries-table-wrap');
+  wrap.innerHTML = `
+    <table>
+      <thead>
+        <tr>
+          <th>#</th>
+          <th>Country</th>
+          <th style="text-align:right">YT Views</th>
+          <th style="text-align:right;color:var(--sc)">SC Downloads</th>
+          <th style="text-align:right">Total</th>
+        </tr>
+      </thead>
+      <tbody>
+        ${countries.map((c, i) => `
+          <tr>
+            <td class="ep-rank">${String(i+1).padStart(2,'0')}</td>
+            <td class="ep-title">${c.name || c.country_name || '—'}</td>
+            <td class="ep-views" style="text-align:right;color:var(--yt)">—</td>
+            <td class="ep-views" style="text-align:right;color:var(--sc)">${fmt(c.downloads_total || c.total || 0)}</td>
+            <td class="ep-views" style="text-align:right;font-weight:600">${fmt(c.downloads_total || c.total || 0)}</td>
           </tr>
         `).join('')}
       </tbody>
