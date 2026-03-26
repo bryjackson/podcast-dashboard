@@ -551,6 +551,10 @@
       <input type="password" id="yt-client-id" placeholder="123456...apps.googleusercontent.com">
     </div>
     <div class="cred-group">
+      <label>YouTube OAuth Client Secret</label>
+      <input type="password" id="yt-client-secret" placeholder="GOCSPX-...">
+    </div>
+    <div class="cred-group">
       <label>Simplecast API Token</label>
       <input type="password" id="sc-token" placeholder="your-simplecast-token">
     </div>
@@ -655,7 +659,7 @@
 <script>
 // ─── State ───────────────────────────────────────────────
 let state = {
-  ytApiKey: '', ytClientId: '', scToken: '',
+  ytApiKey: '', ytClientId: '', ytClientSecret: '', scToken: '',
   accessToken: null, channelId: null, scPodcastId: null,
   range: 90, ytConnected: false, scConnected: false,
   charts: {}
@@ -673,6 +677,7 @@ function setRange(days) {
 async function initDashboard() {
   state.ytApiKey = document.getElementById('yt-api-key').value.trim();
   state.ytClientId = document.getElementById('yt-client-id').value.trim();
+  state.ytClientSecret = document.getElementById('yt-client-secret').value.trim();
   state.scToken = document.getElementById('sc-token').value.trim();
 
   setStatus('Connecting...', '');
@@ -713,6 +718,7 @@ function openGoogleAuth() {
   // Save credentials to sessionStorage so they survive the redirect
   sessionStorage.setItem('yt_api_key', state.ytApiKey);
   sessionStorage.setItem('yt_client_id', state.ytClientId);
+  sessionStorage.setItem('yt_client_secret', state.ytClientSecret);
   sessionStorage.setItem('sc_token', state.scToken);
 
   window.location.href = 'https://accounts.google.com/o/oauth2/v2/auth?' + params;
@@ -746,6 +752,7 @@ async function exchangeCode(code) {
       body: new URLSearchParams({
         code,
         client_id: state.ytClientId,
+        client_secret: state.ytClientSecret,
         redirect_uri: 'https://bryjackson.github.io/podcast-dashboard/',
         grant_type: 'authorization_code'
       })
@@ -759,6 +766,7 @@ async function exchangeCode(code) {
     history.replaceState(null, '', window.location.pathname);
     sessionStorage.removeItem('yt_api_key');
     sessionStorage.removeItem('yt_client_id');
+    sessionStorage.removeItem('yt_client_secret');
     sessionStorage.removeItem('sc_token');
 
     document.getElementById('oauth-step').style.display = 'none';
@@ -1158,11 +1166,13 @@ async function boot() {
     // Restore credentials from sessionStorage
     state.ytApiKey = sessionStorage.getItem('yt_api_key') || '';
     state.ytClientId = sessionStorage.getItem('yt_client_id') || '';
+    state.ytClientSecret = sessionStorage.getItem('yt_client_secret') || '';
     state.scToken = sessionStorage.getItem('sc_token') || '';
 
     // Restore field values
     document.getElementById('yt-api-key').value = state.ytApiKey;
     document.getElementById('yt-client-id').value = state.ytClientId;
+    document.getElementById('yt-client-secret').value = state.ytClientSecret;
     document.getElementById('sc-token').value = state.scToken;
 
     setStatus('Google authorized! Connecting...', 'ok');
