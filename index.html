@@ -547,6 +547,10 @@
       <input type="password" id="yt-api-key" placeholder="AIza...">
     </div>
     <div class="cred-group">
+      <label>YouTube Channel ID</label>
+      <input type="text" id="yt-channel-id" placeholder="UCxxxxxxxxxxxxxxxxxx" value="UCq2ZnkIGhnu69Ci49byXwzg">
+    </div>
+    <div class="cred-group">
       <label>YouTube OAuth Client ID</label>
       <input type="password" id="yt-client-id" placeholder="123456...apps.googleusercontent.com">
     </div>
@@ -659,7 +663,7 @@
 <script>
 // ─── State ───────────────────────────────────────────────
 let state = {
-  ytApiKey: '', ytClientId: '', ytClientSecret: '', scToken: '',
+  ytApiKey: '', ytClientId: '', ytClientSecret: '', ytChannelId: '', scToken: '',
   accessToken: null, channelId: null, scPodcastId: null,
   range: 90, ytConnected: false, scConnected: false,
   charts: {}
@@ -676,6 +680,7 @@ function setRange(days) {
 // ─── Init ─────────────────────────────────────────────────
 async function initDashboard() {
   state.ytApiKey = document.getElementById('yt-api-key').value.trim();
+  state.ytChannelId = document.getElementById('yt-channel-id').value.trim();
   state.ytClientId = document.getElementById('yt-client-id').value.trim();
   state.ytClientSecret = document.getElementById('yt-client-secret').value.trim();
   state.scToken = document.getElementById('sc-token').value.trim();
@@ -717,6 +722,7 @@ function openGoogleAuth() {
 
   // Save credentials to sessionStorage so they survive the redirect
   sessionStorage.setItem('yt_api_key', state.ytApiKey);
+  sessionStorage.setItem('yt_channel_id', state.ytChannelId);
   sessionStorage.setItem('yt_client_id', state.ytClientId);
   sessionStorage.setItem('yt_client_secret', state.ytClientSecret);
   sessionStorage.setItem('sc_token', state.scToken);
@@ -798,44 +804,17 @@ async function connectYouTubeBasic() {
 // ─── YouTube Analytics (OAuth) ────────────────────────────
 async function connectYouTubeAnalytics() {
   try {
-    // First try mine=true
-    let chRes = await fetch('https://www.googleapis.com/youtube/v3/channels?part=statistics,snippet&mine=true', {
+    // Use the channel ID directly since mine=true doesn't work for Brand Accounts
+    const channelId = state.ytChannelId || 'UCq2ZnkIGhnu69Ci49byXwzg';
+    const chRes = await fetch(`https://www.googleapis.com/youtube/v3/channels?part=statistics,snippet&id=${channelId}`, {
       headers: { Authorization: `Bearer ${state.accessToken}` }
     });
-    let chData = await chRes.json();
-    console.log('YT Channel response (mine=true):', JSON.stringify(chData));
+    const chData = await chRes.json();
+    console.log('YT Channel response (by ID):', JSON.stringify(chData));
 
-    // If no results, try fetching managed channels via memberships
-    if (!chData.items?.length) {
-      console.log('No channel found with mine=true, trying managedByMe...');
-      chRes = await fetch('https://www.googleapis.com/youtube/v3/channels?part=statistics,snippet&managedByMe=true&onBehalfOfContentOwner=', {
-        headers: { Authorization: `Bearer ${state.accessToken}` }
-      });
-      chData = await chRes.json();
-      console.log('YT Channel response (managedByMe):', JSON.stringify(chData));
-    }
-
-    // If still no results, list all channels the token has access to
-    if (!chData.items?.length) {
-      console.log('Trying channel list via token identity...');
-      const idRes = await fetch('https://www.googleapis.com/oauth2/v3/userinfo', {
-        headers: { Authorization: `Bearer ${state.accessToken}` }
-      });
-      const idData = await idRes.json();
-      console.log('User identity:', JSON.stringify(idData));
-
-      // Try fetching channel by handle/forHandle if we know the channel
-      chRes = await fetch('https://www.googleapis.com/youtube/v3/channels?part=statistics,snippet&mine=true&includeAllDefaultGroups=true', {
-        headers: { Authorization: `Bearer ${state.accessToken}` }
-      });
-      chData = await chRes.json();
-      console.log('YT Channel response (includeAllDefaultGroups):', JSON.stringify(chData));
-    }
-
-    if (!chData.items?.length) throw new Error('No channel found — your Google account may manage the podcast channel as a Brand Account. Check console for details.');
-
+    if (!chData.items?.length) throw new Error('Channel not found. Check your Channel ID.');
     const ch = chData.items[0];
-    console.log('YT Channel ID:', ch.id, 'Name:', ch.snippet.title);
+    console.log('YT Channel Name:', ch.snippet.title);
     state.channelId = ch.id;
     state.ytConnected = true;
     const subs = parseInt(ch.statistics.subscriberCount || 0);
@@ -914,24 +893,18 @@ async function loadYTAnalytics() {
 
 // ─── YouTube Videos ───────────────────────────────────────
 async function loadYTVideos() {
-  if (!state.channelId) return;
+  const channelId = state.channelId || state.ytChannelId || 'UCq2ZnkIGhnu69Ci49byXwzg';
+  if (!channelId) return;
   try {
-    const headers = state.accessToken
-      ? { Authorization: `Bearer ${state.accessToken}` }
-      : {};
-    const url = state.accessToken
-      ? `https://www.googleapis.com/youtube/v3/search?part=snippet&channelId=${state.channelId}&maxResults=10&order=viewCount&type=video`
-      : `https://www.googleapis.com/youtube/v3/search?part=snippet&channelId=${state.channelId}&maxResults=10&order=viewCount&type=video&key=${state.ytApiKey}`;
+    const headers = state.accessToken ? { Authorization: `Bearer ${state.accessToken}` } : {};
+    const url = `https://www.googleapis.com/youtube/v3/search?part=snippet&channelId=${channelId}&maxResults=10&order=viewCount&type=video&key=${state.ytApiKey}`;
 
     const res = await fetch(url, { headers });
     const data = await res.json();
     if (!data.items) return;
 
     const videoIds = data.items.map(i => i.id.videoId).join(',');
-    const statsUrl = state.accessToken
-      ? `https://www.googleapis.com/youtube/v3/videos?part=statistics,snippet&id=${videoIds}`
-      : `https://www.googleapis.com/youtube/v3/videos?part=statistics,snippet&id=${videoIds}&key=${state.ytApiKey}`;
-
+    const statsUrl = `https://www.googleapis.com/youtube/v3/videos?part=statistics,snippet&id=${videoIds}&key=${state.ytApiKey}`;
     const statsRes = await fetch(statsUrl, { headers });
     const statsData = await statsRes.json();
 
@@ -942,7 +915,7 @@ async function loadYTVideos() {
     })).sort((a, b) => b.views - a.views);
 
     renderEpisodesTable();
-  } catch(e) { console.error('YT Videos error', e); }
+  } catch(e) { console.error('YT Videos error:', e); }
 }
 
 // ─── Simplecast Data ──────────────────────────────────────
@@ -1210,12 +1183,13 @@ async function boot() {
   if (code) {
     // Restore credentials from sessionStorage
     state.ytApiKey = sessionStorage.getItem('yt_api_key') || '';
+    state.ytChannelId = sessionStorage.getItem('yt_channel_id') || '';
     state.ytClientId = sessionStorage.getItem('yt_client_id') || '';
     state.ytClientSecret = sessionStorage.getItem('yt_client_secret') || '';
     state.scToken = sessionStorage.getItem('sc_token') || '';
 
-    // Restore field values
     document.getElementById('yt-api-key').value = state.ytApiKey;
+    document.getElementById('yt-channel-id').value = state.ytChannelId;
     document.getElementById('yt-client-id').value = state.ytClientId;
     document.getElementById('yt-client-secret').value = state.ytClientSecret;
     document.getElementById('sc-token').value = state.scToken;
