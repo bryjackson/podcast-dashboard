@@ -702,17 +702,20 @@ function openGoogleAuth() {
     'https://www.googleapis.com/auth/yt-analytics.readonly'
   ].join(' ');
 
-  // Use urn:ietf:wg:oauth:2.0:oob redirect — works from file:/// 
   const params = new URLSearchParams({
     client_id: state.ytClientId,
-    redirect_uri: 'urn:ietf:wg:oauth:2.0:oob',
+    redirect_uri: 'https://bryjackson.github.io/podcast-dashboard/',
     response_type: 'code',
     scope: scopes,
     access_type: 'offline'
   });
 
-  window.open('https://accounts.google.com/o/oauth2/v2/auth?' + params, '_blank');
-  document.getElementById('oauth-step-status').textContent = 'Google login opened in a new tab. After approving, copy the code shown and paste it above.';
+  // Save credentials to sessionStorage so they survive the redirect
+  sessionStorage.setItem('yt_api_key', state.ytApiKey);
+  sessionStorage.setItem('yt_client_id', state.ytClientId);
+  sessionStorage.setItem('sc_token', state.scToken);
+
+  window.location.href = 'https://accounts.google.com/o/oauth2/v2/auth?' + params;
 }
 
 // ─── OAuth: Submit Code ───────────────────────────────────
@@ -723,13 +726,17 @@ async function submitOAuthCode() {
     return;
   }
 
-  // Extract code whether they pasted full URL or just the code
   let code = input;
   if (input.includes('code=')) {
     const match = input.match(/[?&]code=([^&]+)/);
     if (match) code = decodeURIComponent(match[1]);
   }
 
+  await exchangeCode(code);
+}
+
+// ─── OAuth: Exchange Code for Token ──────────────────────
+async function exchangeCode(code) {
   document.getElementById('oauth-step-status').textContent = 'Exchanging code for access token...';
 
   try {
@@ -739,18 +746,23 @@ async function submitOAuthCode() {
       body: new URLSearchParams({
         code,
         client_id: state.ytClientId,
-        redirect_uri: 'urn:ietf:wg:oauth:2.0:oob',
+        redirect_uri: 'https://bryjackson.github.io/podcast-dashboard/',
         grant_type: 'authorization_code'
       })
     });
 
     const data = await res.json();
-
     if (data.error) throw new Error(data.error_description || data.error);
     state.accessToken = data.access_token;
 
-    document.getElementById('oauth-step-status').textContent = '✓ Authorized! Loading YouTube Analytics...';
+    // Clean up URL and sessionStorage
+    history.replaceState(null, '', window.location.pathname);
+    sessionStorage.removeItem('yt_api_key');
+    sessionStorage.removeItem('yt_client_id');
+    sessionStorage.removeItem('sc_token');
+
     document.getElementById('oauth-step').style.display = 'none';
+    setStatus('YouTube & Simplecast connected.', 'ok');
     toggleCreds(false);
 
     await connectYouTubeAnalytics();
@@ -1143,7 +1155,34 @@ function toggleCreds(show) {
 }
 
 // ─── Boot ──────────────────────────────────────────────────
-// Nothing to do on load — user initiates via the form
+async function boot() {
+  const urlParams = new URLSearchParams(window.location.search);
+  const code = urlParams.get('code');
+
+  if (code) {
+    // Restore credentials from sessionStorage
+    state.ytApiKey = sessionStorage.getItem('yt_api_key') || '';
+    state.ytClientId = sessionStorage.getItem('yt_client_id') || '';
+    state.scToken = sessionStorage.getItem('sc_token') || '';
+
+    // Restore field values
+    document.getElementById('yt-api-key').value = state.ytApiKey;
+    document.getElementById('yt-client-id').value = state.ytClientId;
+    document.getElementById('sc-token').value = state.scToken;
+
+    setStatus('Google authorized! Connecting...', 'ok');
+
+    if (state.scToken) await connectSimplecast();
+    if (state.ytApiKey) await connectYouTubeBasic();
+
+    document.getElementById('oauth-step').style.display = 'block';
+    document.getElementById('oauth-step-status').textContent = 'Completing Google authorization...';
+
+    await exchangeCode(code);
+  }
+}
+
+boot();
 </script>
 </body>
 </html>
