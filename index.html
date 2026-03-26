@@ -798,12 +798,42 @@ async function connectYouTubeBasic() {
 // ─── YouTube Analytics (OAuth) ────────────────────────────
 async function connectYouTubeAnalytics() {
   try {
-    const chRes = await fetch('https://www.googleapis.com/youtube/v3/channels?part=statistics,snippet&mine=true', {
+    // First try mine=true
+    let chRes = await fetch('https://www.googleapis.com/youtube/v3/channels?part=statistics,snippet&mine=true', {
       headers: { Authorization: `Bearer ${state.accessToken}` }
     });
-    const chData = await chRes.json();
-    console.log('YT Channel response:', JSON.stringify(chData));
-    if (!chData.items?.length) throw new Error('No channel found');
+    let chData = await chRes.json();
+    console.log('YT Channel response (mine=true):', JSON.stringify(chData));
+
+    // If no results, try fetching managed channels via memberships
+    if (!chData.items?.length) {
+      console.log('No channel found with mine=true, trying managedByMe...');
+      chRes = await fetch('https://www.googleapis.com/youtube/v3/channels?part=statistics,snippet&managedByMe=true&onBehalfOfContentOwner=', {
+        headers: { Authorization: `Bearer ${state.accessToken}` }
+      });
+      chData = await chRes.json();
+      console.log('YT Channel response (managedByMe):', JSON.stringify(chData));
+    }
+
+    // If still no results, list all channels the token has access to
+    if (!chData.items?.length) {
+      console.log('Trying channel list via token identity...');
+      const idRes = await fetch('https://www.googleapis.com/oauth2/v3/userinfo', {
+        headers: { Authorization: `Bearer ${state.accessToken}` }
+      });
+      const idData = await idRes.json();
+      console.log('User identity:', JSON.stringify(idData));
+
+      // Try fetching channel by handle/forHandle if we know the channel
+      chRes = await fetch('https://www.googleapis.com/youtube/v3/channels?part=statistics,snippet&mine=true&includeAllDefaultGroups=true', {
+        headers: { Authorization: `Bearer ${state.accessToken}` }
+      });
+      chData = await chRes.json();
+      console.log('YT Channel response (includeAllDefaultGroups):', JSON.stringify(chData));
+    }
+
+    if (!chData.items?.length) throw new Error('No channel found — your Google account may manage the podcast channel as a Brand Account. Check console for details.');
+
     const ch = chData.items[0];
     console.log('YT Channel ID:', ch.id, 'Name:', ch.snippet.title);
     state.channelId = ch.id;
@@ -814,7 +844,7 @@ async function connectYouTubeAnalytics() {
     setStatus('YouTube & Simplecast connected.', 'ok');
   } catch(e) {
     console.error('YT Analytics error:', e);
-    setStatus('YouTube Analytics error: ' + e.message, 'err');
+    setStatus('YouTube error: ' + e.message, 'err');
   }
 }
 
@@ -927,12 +957,23 @@ async function loadSimplecastData() {
 
     if (epData.collection) {
       console.log('SC first episode sample:', JSON.stringify(epData.collection[0]));
-      state.scEpisodes = epData.collection.map(ep => ({
-        title: ep.title,
-        views: ep.downloads?.total || 0,
-        platform: 'sc'
-      })).sort((a, b) => b.views - a.views);
 
+      // Fetch download counts for each episode from analytics endpoint
+      const episodesWithDownloads = await Promise.all(epData.collection.map(async ep => {
+        try {
+          const dlRes = await fetch(`https://api.simplecast.com/analytics/downloads?episode=${ep.id}&podcast=${state.scPodcastId}`, {
+            headers: { Authorization: `Bearer ${state.scToken}` }
+          });
+          const dlData = await dlRes.json();
+          console.log(`SC downloads for "${ep.title}":`, JSON.stringify(dlData));
+          const downloads = dlData.total || dlData.downloads_total || dlData.count || 0;
+          return { title: ep.title, views: downloads, platform: 'sc' };
+        } catch {
+          return { title: ep.title, views: 0, platform: 'sc' };
+        }
+      }));
+
+      state.scEpisodes = episodesWithDownloads.sort((a, b) => b.views - a.views);
       const totalListens = state.scEpisodes.reduce((a, ep) => a + ep.views, 0);
       state.scTotalListens = totalListens;
       document.getElementById('stat-listeners').textContent = fmt(totalListens);
