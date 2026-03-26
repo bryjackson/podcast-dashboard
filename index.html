@@ -775,18 +775,13 @@ async function exchangeCode(code) {
 
 // ─── YouTube Basic (API Key only) ─────────────────────────
 async function connectYouTubeBasic() {
+  // Skip basic connect during OAuth redirect — analytics will handle it
+  if (!state.ytApiKey) return;
   try {
-    const res = await fetch(`https://www.googleapis.com/youtube/v3/channels?part=statistics,snippet&mine=true&key=${state.ytApiKey}`);
-    if (!res.ok) throw new Error();
-    const data = await res.json();
-    if (!data.items?.length) throw new Error();
-    const ch = data.items[0];
-    state.channelId = ch.id;
-    state.ytConnected = true;
-    const subs = parseInt(ch.statistics.subscriberCount || 0);
-    document.getElementById('stat-subs').textContent = fmt(subs);
-    document.getElementById('stat-subs-sub').textContent = 'Total subscribers';
-    await loadYTVideos();
+    // Use the access token if available, otherwise skip basic connect
+    // Basic connect with API key alone can't use mine=true — skip silently
+    // Channel info will be populated by connectYouTubeAnalytics via OAuth
+    state.ytConnected = false;
   } catch {
     setStatus('YouTube API key error. Check your key and try again.', 'err');
   }
