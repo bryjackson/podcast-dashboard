@@ -802,8 +802,10 @@ async function connectYouTubeAnalytics() {
       headers: { Authorization: `Bearer ${state.accessToken}` }
     });
     const chData = await chRes.json();
+    console.log('YT Channel response:', JSON.stringify(chData));
     if (!chData.items?.length) throw new Error('No channel found');
     const ch = chData.items[0];
+    console.log('YT Channel ID:', ch.id, 'Name:', ch.snippet.title);
     state.channelId = ch.id;
     state.ytConnected = true;
     const subs = parseInt(ch.statistics.subscriberCount || 0);
@@ -811,6 +813,7 @@ async function connectYouTubeAnalytics() {
     document.getElementById('stat-subs-sub').textContent = 'Total subscribers';
     setStatus('YouTube & Simplecast connected.', 'ok');
   } catch(e) {
+    console.error('YT Analytics error:', e);
     setStatus('YouTube Analytics error: ' + e.message, 'err');
   }
 }
@@ -923,6 +926,7 @@ async function loadSimplecastData() {
     const epData = await epRes.json();
 
     if (epData.collection) {
+      console.log('SC first episode sample:', JSON.stringify(epData.collection[0]));
       state.scEpisodes = epData.collection.map(ep => ({
         title: ep.title,
         views: ep.downloads?.total || 0,
