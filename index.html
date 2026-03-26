@@ -630,8 +630,8 @@
   </div>
 
   <!-- Right: Episodes table with solid header aligned to left title -->
-  <div class="table-card" style="overflow:hidden; display:flex; flex-direction:column; max-height:588px;">
-    <div style="padding:28px 28px 14px; background:var(--surface); border-bottom:1px solid var(--border); flex-shrink:0; display:flex; align-items:center; min-height:72px;">
+  <div class="table-card" style="overflow:hidden; display:flex; flex-direction:column; max-height:588px; padding:0;">
+    <div style="padding:28px 28px 24px; background:var(--surface); border-bottom:1px solid var(--border); flex-shrink:0;">
       <div class="chart-title">Episodes</div>
     </div>
     <div id="all-episodes-table-wrap" style="overflow-y:auto; flex:1; padding:0 0 16px;">
@@ -642,25 +642,32 @@
 </div>
 
 <!-- Row 2: Top Performing Episodes + Top Countries -->
-<div style="display:grid; grid-template-columns:1fr 1fr; gap:1px; margin:32px 48px 0; background:var(--border); border:1px solid var(--border);">
+<div style="display:grid; grid-template-columns:1fr 32px 1fr; margin:32px 48px 0;">
 
   <!-- Left: Top Performing Episodes -->
-  <div class="table-card" style="border-right:1px solid var(--border);">
-    <div class="chart-header">
-      <div class="chart-title">Top Performing Episodes</div>
-    </div>
-    <div id="episodes-table-wrap">
-      <div class="empty-state" style="height:200px">AWAITING CONNECTION</div>
+  <div style="border:1px solid var(--border);">
+    <div class="table-card">
+      <div class="chart-header">
+        <div class="chart-title">Top Performing Episodes</div>
+      </div>
+      <div id="episodes-table-wrap">
+        <div class="empty-state" style="height:200px">AWAITING CONNECTION</div>
+      </div>
     </div>
   </div>
 
+  <!-- Gap -->
+  <div></div>
+
   <!-- Right: Top Countries -->
-  <div class="table-card">
-    <div class="chart-header">
-      <div class="chart-title">Top Countries</div>
-    </div>
-    <div id="countries-table-wrap">
-      <div class="empty-state" style="height:200px">AWAITING CONNECTION</div>
+  <div style="border:1px solid var(--border);">
+    <div class="table-card">
+      <div class="chart-header">
+        <div class="chart-title">Top Countries</div>
+      </div>
+      <div id="countries-table-wrap">
+        <div class="empty-state" style="height:200px">AWAITING CONNECTION</div>
+      </div>
     </div>
   </div>
 
@@ -1176,7 +1183,7 @@ function renderAllEpisodesTable() {
         ${episodes.map(ep => `
           <tr>
             <td class="ep-rank" style="font-size:16px">${ep.code}</td>
-            <td class="ep-title">${ep.title}</td>
+            <td class="ep-title">${ep.title.replace(/^S\d+E\d+:\s*/i, '').trim()}</td>
             <td class="ep-views" style="text-align:right;color:var(--yt)">${ep.ytViews > 0 ? fmt(ep.ytViews) : '—'}</td>
             <td class="ep-views" style="text-align:right;color:var(--sc)">${ep.scViews > 0 ? fmt(ep.scViews) : '—'}</td>
             <td class="ep-views" style="text-align:right;font-weight:600">${fmt(ep.total)}</td>
