@@ -552,7 +552,7 @@
 <!-- Credentials Panel -->
 <div id="credentials-panel">
   <h2>Connect Your Platforms</h2>
-  <p>Enter your API credentials below. They stay in your browser and are never stored or sent anywhere.</p>
+  <p>Enter your YouTube credentials below. Simplecast connects automatically. Your credentials stay in your browser and are never stored or sent anywhere.</p>
   <div class="creds-grid">
     <div class="cred-group">
       <label>YouTube API Key</label>
@@ -569,10 +569,6 @@
     <div class="cred-group">
       <label>YouTube OAuth Client Secret</label>
       <input type="password" id="yt-client-secret" placeholder="GOCSPX-...">
-    </div>
-    <div class="cred-group">
-      <label>Simplecast API Token</label>
-      <input type="password" id="sc-token" placeholder="your-simplecast-token">
     </div>
   </div>
   <div class="creds-actions">
@@ -703,7 +699,8 @@
 <script>
 // ─── State ───────────────────────────────────────────────
 let state = {
-  ytApiKey: '', ytClientId: '', ytClientSecret: '', ytChannelId: '', scToken: '',
+  ytApiKey: '', ytClientId: '', ytClientSecret: '', ytChannelId: '',
+  scToken: 'eyJhcGlfa2V5IjoiWkVrdk56a2N4MkorRDFlcDdBU285VGpjU2k2SkZsQnlkR0N2YWtyVWM5UT0ifQ==',
   accessToken: null, channelId: null, scPodcastId: null,
   range: 90, ytConnected: false, scConnected: false,
   charts: {}
@@ -723,7 +720,7 @@ async function initDashboard() {
   state.ytChannelId = document.getElementById('yt-channel-id').value.trim();
   state.ytClientId = document.getElementById('yt-client-id').value.trim();
   state.ytClientSecret = document.getElementById('yt-client-secret').value.trim();
-  state.scToken = document.getElementById('sc-token').value.trim();
+  // scToken is hardcoded — no need to read from input
 
   setStatus('Connecting...', '');
 
@@ -765,12 +762,6 @@ function openGoogleAuth() {
   localStorage.setItem('oas_yt_channel_id', state.ytChannelId);
   localStorage.setItem('oas_yt_client_id', state.ytClientId);
   localStorage.setItem('oas_yt_client_secret', state.ytClientSecret);
-  localStorage.setItem('oas_sc_token', state.scToken);
-
-  // Debug: confirm what was saved
-  console.log('Saved to localStorage before redirect:');
-  console.log('sc_token length:', localStorage.getItem('oas_sc_token')?.length || 0);
-  console.log('yt_api_key length:', localStorage.getItem('oas_yt_api_key')?.length || 0);
 
   window.location.href = 'https://accounts.google.com/o/oauth2/v2/auth?' + params;
 }
@@ -873,7 +864,6 @@ async function connectYouTubeAnalytics() {
 // ─── Simplecast ───────────────────────────────────────────
 async function connectSimplecast() {
   try {
-    console.log('connectSimplecast called, token length:', state.scToken?.length, 'first 20:', state.scToken?.substring(0,20));
     const res = await fetch('https://api.simplecast.com/podcasts', {
       headers: { Authorization: `Bearer ${state.scToken}` }
     });
@@ -1002,33 +992,20 @@ async function loadSimplecastData() {
       renderEpisodeBarChart();
     }
 
-    // Top Countries — explore technology sub-endpoints and dedicated country endpoints
+    // Top Countries — use confirmed endpoint
     try {
-      // First get the full technology object to see all sub-hrefs
-      const techRes = await fetch(`https://api.simplecast.com/analytics/technology?podcast=${state.scPodcastId}`, {
-        headers: { Authorization: `Bearer ${state.scToken}` }
-      });
-      const techData = await techRes.json();
-      console.log('Full technology object:', JSON.stringify(techData));
-
-      // Try the dedicated country sub-endpoints
-      const countryAttempts = [
-        `https://api.simplecast.com/analytics/technology/countries?podcast=${state.scPodcastId}`,
-        `https://api.simplecast.com/analytics/technology/country?podcast=${state.scPodcastId}`,
+      const countriesRes = await fetch(
         `https://api.simplecast.com/analytics/location?podcast=${state.scPodcastId}`,
-        `https://api.simplecast.com/analytics/locations?podcast=${state.scPodcastId}`,
-      ];
-      for (const url of countryAttempts) {
-        const r = await fetch(url, { headers: { Authorization: `Bearer ${state.scToken}` } });
-        console.log(`Country sub-attempt ${url}: ${r.status}`);
-        if (r.ok) {
-          const d = await r.json();
-          console.log('Country sub-data:', JSON.stringify(d).substring(0, 600));
-          const collection = d.collection || d.countries || d.by_country || d.items || [];
-          if (collection.length) { state.scCountries = collection.slice(0, 10); renderCountriesTable(); break; }
+        { headers: { Authorization: `Bearer ${state.scToken}` } }
+      );
+      if (countriesRes.ok) {
+        const countriesData = await countriesRes.json();
+        if (countriesData.countries?.length) {
+          state.scCountries = countriesData.countries.slice(0, 10);
+          renderCountriesTable();
         }
       }
-    } catch(e) { console.log('Country discovery error:', e.message); }
+    } catch(e) { console.log('Countries error:', e.message); }
 
     // Analytics over time
     const endDate = new Date().toISOString().split('T')[0];
@@ -1231,10 +1208,10 @@ function renderCountriesTable() {
         ${countries.map((c, i) => `
           <tr>
             <td class="ep-rank">${String(i+1).padStart(2,'0')}</td>
-            <td class="ep-title">${c.name || c.country_name || '—'}</td>
+            <td class="ep-title">${c.name || '—'}</td>
             <td class="ep-views" style="text-align:right;color:var(--yt)">—</td>
-            <td class="ep-views" style="text-align:right;color:var(--sc)">${fmt(c.downloads_total || c.total || 0)}</td>
-            <td class="ep-views" style="text-align:right;font-weight:600">${fmt(c.downloads_total || c.total || 0)}</td>
+            <td class="ep-views" style="text-align:right;color:var(--sc)">${fmt(c.downloads_total || 0)}</td>
+            <td class="ep-views" style="text-align:right;font-weight:600">${fmt(c.downloads_total || 0)}</td>
           </tr>
         `).join('')}
       </tbody>
@@ -1395,26 +1372,15 @@ async function boot() {
   const code = urlParams.get('code');
 
   if (code) {
-    // Debug: check what's in storage on return
-    console.log('Returned from Google OAuth. Checking storage:');
-    console.log('localStorage oas_sc_token length:', localStorage.getItem('oas_sc_token')?.length || 0);
-    console.log('localStorage oas_yt_api_key length:', localStorage.getItem('oas_yt_api_key')?.length || 0);
-    console.log('sessionStorage sc_token length:', sessionStorage.getItem('sc_token')?.length || 0);
-
-    // Restore credentials — try localStorage first (more reliable across redirects), fall back to sessionStorage
+    // Restore credentials — try localStorage first, fall back to sessionStorage
     state.ytApiKey = localStorage.getItem('oas_yt_api_key') || sessionStorage.getItem('yt_api_key') || '';
     state.ytChannelId = localStorage.getItem('oas_yt_channel_id') || sessionStorage.getItem('yt_channel_id') || '';
     state.ytClientId = localStorage.getItem('oas_yt_client_id') || sessionStorage.getItem('yt_client_id') || '';
     state.ytClientSecret = localStorage.getItem('oas_yt_client_secret') || sessionStorage.getItem('yt_client_secret') || '';
-    state.scToken = localStorage.getItem('oas_sc_token') || sessionStorage.getItem('sc_token') || '';
-
-    console.log('Restored scToken length:', state.scToken?.length || 0);
-    console.log('Restored scToken first 20 chars:', state.scToken?.substring(0, 20));
-    console.log('Restored scToken last 20 chars:', state.scToken?.substring(state.scToken.length - 20));
-    console.log('Restored scToken char codes (first 10):', [...(state.scToken?.substring(0,10)||'')].map(c=>c.charCodeAt(0)).join(','));
+    // scToken is hardcoded — no need to restore
 
     // Clean up localStorage immediately after reading
-    ['oas_yt_api_key','oas_yt_channel_id','oas_yt_client_id','oas_yt_client_secret','oas_sc_token'].forEach(k => localStorage.removeItem(k));
+    ['oas_yt_api_key','oas_yt_channel_id','oas_yt_client_id','oas_yt_client_secret'].forEach(k => localStorage.removeItem(k));
 
     document.getElementById('yt-api-key').value = state.ytApiKey;
     document.getElementById('yt-channel-id').value = state.ytChannelId;
