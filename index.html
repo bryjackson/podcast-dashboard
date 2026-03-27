@@ -594,19 +594,19 @@
 <!-- Stats Row -->
 <div class="stats-row">
   <div class="stat-card yt">
-    <div class="stat-label">YT Subscribers</div>
+    <div class="stat-label">YouTube Subscribers</div>
     <div class="stat-value" id="stat-subs">—</div>
     <div class="stat-sub" id="stat-subs-sub">Connect to load</div>
+  </div>
+  <div class="stat-card yt">
+    <div class="stat-label">YouTube Views</div>
+    <div class="stat-value" id="stat-total">—</div>
+    <div class="stat-sub" id="stat-total-sub">—</div>
   </div>
   <div class="stat-card sc">
     <div class="stat-label">Simplecast Downloads</div>
     <div class="stat-value" id="stat-listeners">—</div>
     <div class="stat-sub" id="stat-listeners-sub">Connect to load</div>
-  </div>
-  <div class="stat-card combined">
-    <div class="stat-label">Total Views & Downloads</div>
-    <div class="stat-value" id="stat-total">—</div>
-    <div class="stat-sub" id="stat-total-sub">—</div>
   </div>
   <div class="stat-card growth">
     <div class="stat-label">Episodes Published</div>
@@ -1331,10 +1331,8 @@ function renderEpisodeBarChart() {
 
 function combineCharts() {
   const ytTotal = state.ytVideos?.reduce((a, v) => a + (v.ytViews || 0), 0) || 0;
-  const scTotal = state.scTotalListens || 0;
-  const combined = ytTotal + scTotal;
-  if (combined) {
-    document.getElementById('stat-total').textContent = fmt(combined);
+  if (ytTotal) {
+    document.getElementById('stat-total').textContent = fmt(ytTotal);
     document.getElementById('stat-total-sub').textContent = 'All time';
   }
 }
@@ -1368,14 +1366,13 @@ function updateStatsByMonth() {
   const val = selector.value;
 
   if (val === 'current') {
-    // Restore all-time stats
     const scTotal = state.scEpisodes?.reduce((a, ep) => a + (ep.scViews || 0), 0) || 0;
     const ytTotal = state.ytVideos?.reduce((a, v) => a + (v.ytViews || 0), 0) || 0;
     const epCount = state.scEpisodes?.length || state.ytVideos?.length || 0;
 
     document.getElementById('stat-listeners').textContent = fmt(scTotal);
     document.getElementById('stat-listeners-sub').textContent = 'All time';
-    document.getElementById('stat-total').textContent = fmt(scTotal + ytTotal);
+    document.getElementById('stat-total').textContent = fmt(ytTotal);
     document.getElementById('stat-total-sub').textContent = 'All time';
     document.getElementById('stat-episodes').textContent = fmt(epCount);
     document.getElementById('stat-episodes-sub').textContent = 'All time';
@@ -1416,7 +1413,7 @@ function updateStatsByMonth() {
 
   document.getElementById('stat-listeners').textContent = fmt(scDownloads);
   document.getElementById('stat-listeners-sub').textContent = label;
-  document.getElementById('stat-total').textContent = fmt(scDownloads + ytViews);
+  document.getElementById('stat-total').textContent = fmt(ytViews);
   document.getElementById('stat-total-sub').textContent = label;
   document.getElementById('stat-episodes').textContent = fmt(publishedByDate.length);
   document.getElementById('stat-episodes-sub').textContent = label;
