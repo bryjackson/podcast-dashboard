@@ -966,6 +966,7 @@ async function loadSimplecastData() {
       const episodes = epData.collection;
       const batchSize = 3;
       const episodesWithDownloads = [];
+      if (!state.scEpisodeIntervals) state.scEpisodeIntervals = {};
 
       for (let i = 0; i < episodes.length; i += batchSize) {
         const batch = episodes.slice(i, i + batchSize);
@@ -976,11 +977,15 @@ async function loadSimplecastData() {
             });
             const dlData = await dlRes.json();
             const downloads = dlData.total || 0;
+            // Store interval data for historical date filtering
+            if (dlData.by_interval) {
+              state.scEpisodeIntervals[ep.id] = dlData.by_interval;
+            }
             return { title: ep.title, scViews: downloads, views: downloads, platform: 'sc',
-                   publishedAt: ep.published_at || ep.scheduled_for || null };
+                     publishedAt: ep.published_at || null };
           } catch {
             return { title: ep.title, scViews: 0, views: 0, platform: 'sc',
-                   publishedAt: ep.published_at || null };
+                     publishedAt: ep.published_at || null };
           }
         }));
         episodesWithDownloads.push(...batchResults);
@@ -1378,34 +1383,34 @@ function updateStatsByMonth() {
     return;
   }
 
-  // Parse the selected date (first of the month)
-  const asOf = new Date(val + 'T00:00:00');
-  const label = `As of ${asOf.toLocaleString('default', { month: 'long', day: 'numeric', year: 'numeric' })}`;
+  // Parse selected date as end-of-day on the 1st of that month
+  const asOf = new Date(val);
+  asOf.setHours(23, 59, 59, 999);
+  const label = `As of ${new Date(val).toLocaleString('default', { month: 'long', day: 'numeric', year: 'numeric' })}`;
 
-  // Episodes published up to this date
+  // Episodes published up to this date — exclude those with no date
   const allEps = state.scEpisodes || [];
   const publishedByDate = allEps.filter(ep => {
-    if (!ep.publishedAt) return true; // include if no date
+    if (!ep.publishedAt) return false;
     return new Date(ep.publishedAt) <= asOf;
   });
 
-  // SC downloads up to this date — sum from by_interval data
-  // We use the stored per-episode interval data
+  // SC downloads up to this date using stored interval data
   let scDownloads = 0;
-  if (state.scEpisodeIntervals) {
-    for (const [epId, intervals] of Object.entries(state.scEpisodeIntervals)) {
+  if (state.scEpisodeIntervals && Object.keys(state.scEpisodeIntervals).length > 0) {
+    for (const intervals of Object.values(state.scEpisodeIntervals)) {
       intervals.forEach(d => {
-        if (new Date(d.interval) <= asOf) scDownloads += d.downloads_total || 0;
+        if (new Date(d.interval + 'T23:59:59') <= asOf) scDownloads += d.downloads_total || 0;
       });
     }
   } else {
-    // Fall back to total if no interval data
-    scDownloads = allEps.reduce((a, ep) => a + (ep.scViews || 0), 0);
+    // Fall back to summing published episodes only
+    scDownloads = publishedByDate.reduce((a, ep) => a + (ep.scViews || 0), 0);
   }
 
-  // YT views — sum from videos published before this date
+  // YT views — sum from videos published on or before this date
   const ytViews = (state.ytVideos || []).filter(v => {
-    if (!v.publishedAt) return true;
+    if (!v.publishedAt) return false;
     return new Date(v.publishedAt) <= asOf;
   }).reduce((a, v) => a + (v.ytViews || 0), 0);
 
