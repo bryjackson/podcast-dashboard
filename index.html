@@ -552,8 +552,8 @@
 <!-- Credentials Panel -->
 <div id="credentials-panel">
   <h2>Connect Your Platforms</h2>
-  <p>Simplecast and YouTube connect automatically. Enter your YouTube OAuth Client Secret below to authorize your Google account, then click Load Dashboard.</p>
-  <div class="creds-grid" style="grid-template-columns: 1fr 1fr;">
+  <p>Enter your YouTube OAuth Client Secret below. Everything else connects automatically.</p>
+  <div class="creds-grid" style="grid-template-columns:1fr 1fr;">
     <div class="cred-group">
       <label>YouTube OAuth Client Secret</label>
       <input type="password" id="yt-client-secret" placeholder="GOCSPX-...">
@@ -565,21 +565,17 @@
     <span id="auth-status"></span>
   </div>
 
-  <!-- Step 2: OAuth link + code paste -->
+  <!-- Step 2: OAuth -->
   <div id="oauth-step" style="display:none; margin-top:24px; padding-top:24px; border-top:1px solid var(--border);">
     <p style="margin-bottom:12px; color:var(--text); font-size:13px;">
       <strong>Step 2 — Authorize with Google</strong><br>
-      <span style="color:var(--muted)">Click the button below. Google will open in a new tab. Sign in, approve access, and you'll land on a page that says "This site can't be reached" — that's normal! Copy the full URL from that page and paste it below.</span>
+      <span style="color:var(--muted)">Click below and sign in with your authorized Google account.</span>
     </p>
-    <div style="display:flex; gap:12px; align-items:flex-start; flex-wrap:wrap;">
+    <div style="display:flex; gap:12px; align-items:center;">
       <button class="oauth-btn" id="oauth-btn" onclick="openGoogleAuth()">
         <svg width="16" height="16" viewBox="0 0 16 16" fill="none"><circle cx="8" cy="8" r="7" stroke="currentColor" stroke-width="1.5"/><path d="M8 5v3l2 2" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/></svg>
-        Open Google Login
+        Authorize with Google
       </button>
-      <div style="flex:1; min-width:240px;">
-        <input type="text" id="oauth-code-input" placeholder="Paste the full redirect URL here..." style="width:100%; background:var(--bg); border:1px solid var(--border); color:var(--text); padding:10px 14px; font-family:'DM Mono',monospace; font-size:12px; outline:none;">
-      </div>
-      <button class="btn-primary" onclick="submitOAuthCode()" style="font-size:15px; padding:10px 20px;">CONNECT</button>
     </div>
     <div id="oauth-step-status" style="margin-top:10px; font-size:12px; font-family:'DM Mono',monospace; color:var(--muted);"></div>
   </div>
@@ -716,6 +712,8 @@ async function initDashboard() {
     setStatus('Please enter your YouTube OAuth Client Secret.', 'err');
     return;
   }
+
+  // All credentials hardcoded — proceed directly
 
   if (state.scToken) await connectSimplecast();
   if (state.ytApiKey) await connectYouTubeBasic();
@@ -1370,8 +1368,6 @@ async function boot() {
     // Restore credentials — try localStorage first, fall back to sessionStorage
     // Restore only the client secret — everything else is hardcoded
     state.ytClientSecret = localStorage.getItem('oas_yt_client_secret') || sessionStorage.getItem('yt_client_secret') || '';
-
-    // Clean up localStorage immediately after reading
     localStorage.removeItem('oas_yt_client_secret');
 
     document.getElementById('yt-client-secret').value = state.ytClientSecret;
