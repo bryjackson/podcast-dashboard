@@ -760,12 +760,12 @@ function openGoogleAuth() {
     access_type: 'offline'
   });
 
-  // Save credentials to sessionStorage so they survive the redirect
-  sessionStorage.setItem('yt_api_key', state.ytApiKey);
-  sessionStorage.setItem('yt_channel_id', state.ytChannelId);
-  sessionStorage.setItem('yt_client_id', state.ytClientId);
-  sessionStorage.setItem('yt_client_secret', state.ytClientSecret);
-  sessionStorage.setItem('sc_token', state.scToken);
+  // Save credentials to localStorage so they survive the redirect on all browsers
+  localStorage.setItem('oas_yt_api_key', state.ytApiKey);
+  localStorage.setItem('oas_yt_channel_id', state.ytChannelId);
+  localStorage.setItem('oas_yt_client_id', state.ytClientId);
+  localStorage.setItem('oas_yt_client_secret', state.ytClientSecret);
+  localStorage.setItem('oas_sc_token', state.scToken);
 
   window.location.href = 'https://accounts.google.com/o/oauth2/v2/auth?' + params;
 }
@@ -808,12 +808,10 @@ async function exchangeCode(code) {
     if (data.error) throw new Error(data.error_description || data.error);
     state.accessToken = data.access_token;
 
-    // Clean up URL and sessionStorage
+    // Clean up URL and storage
     history.replaceState(null, '', window.location.pathname);
-    sessionStorage.removeItem('yt_api_key');
-    sessionStorage.removeItem('yt_client_id');
-    sessionStorage.removeItem('yt_client_secret');
-    sessionStorage.removeItem('sc_token');
+    ['yt_api_key','yt_client_id','yt_client_secret','sc_token'].forEach(k => sessionStorage.removeItem(k));
+    ['oas_yt_api_key','oas_yt_channel_id','oas_yt_client_id','oas_yt_client_secret','oas_sc_token'].forEach(k => localStorage.removeItem(k));
 
     document.getElementById('oauth-step').style.display = 'none';
     setStatus('YouTube & Simplecast connected.', 'ok');
@@ -1391,12 +1389,15 @@ async function boot() {
   const code = urlParams.get('code');
 
   if (code) {
-    // Restore credentials from sessionStorage
-    state.ytApiKey = sessionStorage.getItem('yt_api_key') || '';
-    state.ytChannelId = sessionStorage.getItem('yt_channel_id') || '';
-    state.ytClientId = sessionStorage.getItem('yt_client_id') || '';
-    state.ytClientSecret = sessionStorage.getItem('yt_client_secret') || '';
-    state.scToken = sessionStorage.getItem('sc_token') || '';
+    // Restore credentials — try localStorage first (more reliable across redirects), fall back to sessionStorage
+    state.ytApiKey = localStorage.getItem('oas_yt_api_key') || sessionStorage.getItem('yt_api_key') || '';
+    state.ytChannelId = localStorage.getItem('oas_yt_channel_id') || sessionStorage.getItem('yt_channel_id') || '';
+    state.ytClientId = localStorage.getItem('oas_yt_client_id') || sessionStorage.getItem('yt_client_id') || '';
+    state.ytClientSecret = localStorage.getItem('oas_yt_client_secret') || sessionStorage.getItem('yt_client_secret') || '';
+    state.scToken = localStorage.getItem('oas_sc_token') || sessionStorage.getItem('sc_token') || '';
+
+    // Clean up localStorage immediately after reading
+    ['oas_yt_api_key','oas_yt_channel_id','oas_yt_client_id','oas_yt_client_secret','oas_sc_token'].forEach(k => localStorage.removeItem(k));
 
     document.getElementById('yt-api-key').value = state.ytApiKey;
     document.getElementById('yt-channel-id').value = state.ytChannelId;
