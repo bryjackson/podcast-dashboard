@@ -767,6 +767,11 @@ function openGoogleAuth() {
   localStorage.setItem('oas_yt_client_secret', state.ytClientSecret);
   localStorage.setItem('oas_sc_token', state.scToken);
 
+  // Debug: confirm what was saved
+  console.log('Saved to localStorage before redirect:');
+  console.log('sc_token length:', localStorage.getItem('oas_sc_token')?.length || 0);
+  console.log('yt_api_key length:', localStorage.getItem('oas_yt_api_key')?.length || 0);
+
   window.location.href = 'https://accounts.google.com/o/oauth2/v2/auth?' + params;
 }
 
@@ -1389,12 +1394,20 @@ async function boot() {
   const code = urlParams.get('code');
 
   if (code) {
+    // Debug: check what's in storage on return
+    console.log('Returned from Google OAuth. Checking storage:');
+    console.log('localStorage oas_sc_token length:', localStorage.getItem('oas_sc_token')?.length || 0);
+    console.log('localStorage oas_yt_api_key length:', localStorage.getItem('oas_yt_api_key')?.length || 0);
+    console.log('sessionStorage sc_token length:', sessionStorage.getItem('sc_token')?.length || 0);
+
     // Restore credentials — try localStorage first (more reliable across redirects), fall back to sessionStorage
     state.ytApiKey = localStorage.getItem('oas_yt_api_key') || sessionStorage.getItem('yt_api_key') || '';
     state.ytChannelId = localStorage.getItem('oas_yt_channel_id') || sessionStorage.getItem('yt_channel_id') || '';
     state.ytClientId = localStorage.getItem('oas_yt_client_id') || sessionStorage.getItem('yt_client_id') || '';
     state.ytClientSecret = localStorage.getItem('oas_yt_client_secret') || sessionStorage.getItem('yt_client_secret') || '';
     state.scToken = localStorage.getItem('oas_sc_token') || sessionStorage.getItem('sc_token') || '';
+
+    console.log('Restored scToken length:', state.scToken?.length || 0);
 
     // Clean up localStorage immediately after reading
     ['oas_yt_api_key','oas_yt_channel_id','oas_yt_client_id','oas_yt_client_secret','oas_sc_token'].forEach(k => localStorage.removeItem(k));
