@@ -950,32 +950,41 @@ async function loadSimplecastData() {
     const epData = await epRes.json();
 
     if (epData.collection) {
-      // Update episode count stat
+      // Update episode count stat immediately
       document.getElementById('stat-episodes').textContent = fmt(epData.collection.length);
       document.getElementById('stat-episodes-sub').textContent = 'Published episodes';
 
-      // Fetch download counts for each episode
-      const episodesWithDownloads = await Promise.all(epData.collection.map(async ep => {
-        try {
-          const dlRes = await fetch(`https://api.simplecast.com/analytics/downloads?episode=${ep.id}&podcast=${state.scPodcastId}`, {
-            headers: { Authorization: `Bearer ${state.scToken}` }
-          });
-          const dlData = await dlRes.json();
-          const downloads = dlData.total || 0;
-          return { title: ep.title, scViews: downloads, views: downloads, platform: 'sc' };
-        } catch {
-          return { title: ep.title, scViews: 0, views: 0, platform: 'sc' };
-        }
-      }));
+      // Fetch download counts in small batches to avoid overwhelming slower connections
+      const episodes = epData.collection;
+      const batchSize = 3;
+      const episodesWithDownloads = [];
 
-      state.scEpisodes = episodesWithDownloads;
-      const totalListens = state.scEpisodes.reduce((a, ep) => a + ep.scViews, 0);
-      state.scTotalListens = totalListens;
-      document.getElementById('stat-listeners').textContent = fmt(totalListens);
-      document.getElementById('stat-listeners-sub').textContent = 'Total downloads';
-      renderEpisodesTable();
-      renderAllEpisodesTable();
-      renderEpisodeBarChart();
+      for (let i = 0; i < episodes.length; i += batchSize) {
+        const batch = episodes.slice(i, i + batchSize);
+        const batchResults = await Promise.all(batch.map(async ep => {
+          try {
+            const dlRes = await fetch(`https://api.simplecast.com/analytics/downloads?episode=${ep.id}&podcast=${state.scPodcastId}`, {
+              headers: { Authorization: `Bearer ${state.scToken}` }
+            });
+            const dlData = await dlRes.json();
+            const downloads = dlData.total || 0;
+            return { title: ep.title, scViews: downloads, views: downloads, platform: 'sc' };
+          } catch {
+            return { title: ep.title, scViews: 0, views: 0, platform: 'sc' };
+          }
+        }));
+        episodesWithDownloads.push(...batchResults);
+
+        // Update the UI progressively after each batch
+        state.scEpisodes = episodesWithDownloads;
+        const totalListens = state.scEpisodes.reduce((a, ep) => a + ep.scViews, 0);
+        state.scTotalListens = totalListens;
+        document.getElementById('stat-listeners').textContent = fmt(totalListens);
+        document.getElementById('stat-listeners-sub').textContent = 'Total downloads';
+        renderEpisodesTable();
+        renderAllEpisodesTable();
+        renderEpisodeBarChart();
+      }
     }
 
     // Top Countries — use confirmed endpoint
