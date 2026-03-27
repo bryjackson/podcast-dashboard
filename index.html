@@ -541,7 +541,7 @@
 <header>
   <div class="header-left">
     <h1>GO AND SEND <span>ANALYTICS</span></h1>
-    <p>Podcast Intelligence Dashboard</p>
+    <p>Podcast Dashboard</p>
   </div>
   <div class="status-badges">
     <div class="badge" id="yt-badge"><span class="dot"></span> YouTube</div>
@@ -583,6 +583,14 @@
 
 <button class="toggle-creds" id="toggle-creds-btn" style="display:none" onclick="toggleCreds()">▲ Hide credentials</button>
 
+<!-- Month Selector -->
+<div style="display:flex; align-items:center; justify-content:flex-end; margin:32px 48px 8px; gap:12px;">
+  <span style="font-family:'DM Mono',monospace; font-size:11px; letter-spacing:1px; text-transform:uppercase; color:var(--muted);">Viewing stats as of</span>
+  <select id="month-selector" onchange="updateStatsByMonth()" style="background:var(--surface); border:1px solid var(--border); color:var(--text); padding:7px 12px; font-family:'DM Mono',monospace; font-size:12px; outline:none; cursor:pointer;">
+    <option value="current">Current (All Time)</option>
+  </select>
+</div>
+
 <!-- Stats Row -->
 <div class="stats-row">
   <div class="stat-card yt">
@@ -591,14 +599,14 @@
     <div class="stat-sub" id="stat-subs-sub">Connect to load</div>
   </div>
   <div class="stat-card sc">
-    <div class="stat-label">Simplecast Listeners</div>
+    <div class="stat-label">Simplecast Downloads</div>
     <div class="stat-value" id="stat-listeners">—</div>
     <div class="stat-sub" id="stat-listeners-sub">Connect to load</div>
   </div>
   <div class="stat-card combined">
-    <div class="stat-label">Total Views / Plays</div>
+    <div class="stat-label">Total Views & Downloads</div>
     <div class="stat-value" id="stat-total">—</div>
-    <div class="stat-sub" id="stat-total-sub">In selected period</div>
+    <div class="stat-sub" id="stat-total-sub">—</div>
   </div>
   <div class="stat-card growth">
     <div class="stat-label">Episodes Published</div>
@@ -868,6 +876,7 @@ async function loadData() {
   if (state.ytConnected && state.accessToken) await loadYTAnalytics();
   if (state.ytConnected) await loadYTVideos();
   if (state.scConnected) await loadSimplecastData();
+  populateMonthSelector();
   combineCharts();
 }
 
@@ -922,7 +931,8 @@ async function loadYTVideos() {
       title: v.snippet.title,
       ytViews: parseInt(v.statistics.viewCount || 0),
       views: parseInt(v.statistics.viewCount || 0),
-      platform: 'yt'
+      platform: 'yt',
+      publishedAt: v.snippet.publishedAt || null
     }));
 
     // Update episode count if SC hasn't set it yet
@@ -966,9 +976,11 @@ async function loadSimplecastData() {
             });
             const dlData = await dlRes.json();
             const downloads = dlData.total || 0;
-            return { title: ep.title, scViews: downloads, views: downloads, platform: 'sc' };
+            return { title: ep.title, scViews: downloads, views: downloads, platform: 'sc',
+                   publishedAt: ep.published_at || ep.scheduled_for || null };
           } catch {
-            return { title: ep.title, scViews: 0, views: 0, platform: 'sc' };
+            return { title: ep.title, scViews: 0, views: 0, platform: 'sc',
+                   publishedAt: ep.published_at || null };
           }
         }));
         episodesWithDownloads.push(...batchResults);
@@ -1313,11 +1325,97 @@ function renderEpisodeBarChart() {
 }
 
 function combineCharts() {
-  const ytTotal = state.ytChartData?.views?.reduce((a, b) => a + b, 0) || 0;
+  const ytTotal = state.ytVideos?.reduce((a, v) => a + (v.ytViews || 0), 0) || 0;
   const scTotal = state.scTotalListens || 0;
-  if (ytTotal || scTotal) {
-    document.getElementById('stat-total').textContent = fmt(ytTotal + scTotal);
+  const combined = ytTotal + scTotal;
+  if (combined) {
+    document.getElementById('stat-total').textContent = fmt(combined);
+    document.getElementById('stat-total-sub').textContent = 'All time';
   }
+}
+
+// ─── Month Selector ───────────────────────────────────────
+function populateMonthSelector() {
+  const selector = document.getElementById('month-selector');
+  // Start from podcast launch month (May 2025) up to current month
+  const start = new Date(2025, 4, 1); // May 2025
+  const now = new Date();
+  const months = [];
+
+  let d = new Date(now.getFullYear(), now.getMonth(), 1);
+  while (d >= start) {
+    months.push(new Date(d));
+    d.setMonth(d.getMonth() - 1);
+  }
+
+  months.forEach(m => {
+    const label = m.toLocaleString('default', { month: 'long', year: 'numeric' });
+    const value = m.toISOString().split('T')[0]; // YYYY-MM-DD of 1st
+    const opt = document.createElement('option');
+    opt.value = value;
+    opt.textContent = label;
+    selector.appendChild(opt);
+  });
+}
+
+function updateStatsByMonth() {
+  const selector = document.getElementById('month-selector');
+  const val = selector.value;
+
+  if (val === 'current') {
+    // Restore all-time stats
+    const scTotal = state.scEpisodes?.reduce((a, ep) => a + (ep.scViews || 0), 0) || 0;
+    const ytTotal = state.ytVideos?.reduce((a, v) => a + (v.ytViews || 0), 0) || 0;
+    const epCount = state.scEpisodes?.length || state.ytVideos?.length || 0;
+
+    document.getElementById('stat-listeners').textContent = fmt(scTotal);
+    document.getElementById('stat-listeners-sub').textContent = 'All time';
+    document.getElementById('stat-total').textContent = fmt(scTotal + ytTotal);
+    document.getElementById('stat-total-sub').textContent = 'All time';
+    document.getElementById('stat-episodes').textContent = fmt(epCount);
+    document.getElementById('stat-episodes-sub').textContent = 'All time';
+    document.getElementById('stat-subs-sub').textContent = 'Current subscribers';
+    return;
+  }
+
+  // Parse the selected date (first of the month)
+  const asOf = new Date(val + 'T00:00:00');
+  const label = `As of ${asOf.toLocaleString('default', { month: 'long', day: 'numeric', year: 'numeric' })}`;
+
+  // Episodes published up to this date
+  const allEps = state.scEpisodes || [];
+  const publishedByDate = allEps.filter(ep => {
+    if (!ep.publishedAt) return true; // include if no date
+    return new Date(ep.publishedAt) <= asOf;
+  });
+
+  // SC downloads up to this date — sum from by_interval data
+  // We use the stored per-episode interval data
+  let scDownloads = 0;
+  if (state.scEpisodeIntervals) {
+    for (const [epId, intervals] of Object.entries(state.scEpisodeIntervals)) {
+      intervals.forEach(d => {
+        if (new Date(d.interval) <= asOf) scDownloads += d.downloads_total || 0;
+      });
+    }
+  } else {
+    // Fall back to total if no interval data
+    scDownloads = allEps.reduce((a, ep) => a + (ep.scViews || 0), 0);
+  }
+
+  // YT views — sum from videos published before this date
+  const ytViews = (state.ytVideos || []).filter(v => {
+    if (!v.publishedAt) return true;
+    return new Date(v.publishedAt) <= asOf;
+  }).reduce((a, v) => a + (v.ytViews || 0), 0);
+
+  document.getElementById('stat-listeners').textContent = fmt(scDownloads);
+  document.getElementById('stat-listeners-sub').textContent = label;
+  document.getElementById('stat-total').textContent = fmt(scDownloads + ytViews);
+  document.getElementById('stat-total-sub').textContent = label;
+  document.getElementById('stat-episodes').textContent = fmt(publishedByDate.length);
+  document.getElementById('stat-episodes-sub').textContent = label;
+  document.getElementById('stat-subs-sub').textContent = 'Current (historical N/A)';
 }
 
 // ─── Helpers ──────────────────────────────────────────────
