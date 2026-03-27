@@ -552,24 +552,13 @@
 <!-- Credentials Panel -->
 <div id="credentials-panel">
   <h2>Connect Your Platforms</h2>
-  <p>Enter your YouTube credentials below. Simplecast connects automatically. Your credentials stay in your browser and are never stored or sent anywhere.</p>
-  <div class="creds-grid">
-    <div class="cred-group">
-      <label>YouTube API Key</label>
-      <input type="password" id="yt-api-key" placeholder="AIza...">
-    </div>
-    <div class="cred-group">
-      <label>YouTube Channel ID</label>
-      <input type="text" id="yt-channel-id" placeholder="UCxxxxxxxxxxxxxxxxxx" value="UCq2ZnkIGhnu69Ci49byXwzg">
-    </div>
-    <div class="cred-group">
-      <label>YouTube OAuth Client ID</label>
-      <input type="password" id="yt-client-id" placeholder="123456...apps.googleusercontent.com">
-    </div>
+  <p>Simplecast and YouTube connect automatically. Enter your YouTube OAuth Client Secret below to authorize your Google account, then click Load Dashboard.</p>
+  <div class="creds-grid" style="grid-template-columns: 1fr 1fr;">
     <div class="cred-group">
       <label>YouTube OAuth Client Secret</label>
       <input type="password" id="yt-client-secret" placeholder="GOCSPX-...">
     </div>
+    <div class="cred-group"></div>
   </div>
   <div class="creds-actions">
     <button class="btn-primary" onclick="initDashboard()">LOAD DASHBOARD</button>
@@ -699,7 +688,9 @@
 <script>
 // ─── State ───────────────────────────────────────────────
 let state = {
-  ytApiKey: '', ytClientId: '', ytClientSecret: '', ytChannelId: '',
+  ytApiKey: 'AIzaSyAgrHmdEHd6giTyJ85MSAa7ZOaTz7rULrQ',
+  ytClientId: '145013338698-nspgpphn8qnn0t7anqs3tsejh8uo8rjh.apps.googleusercontent.com',
+  ytClientSecret: '', ytChannelId: 'UCq2ZnkIGhnu69Ci49byXwzg',
   scToken: 'eyJhcGlfa2V5IjoiWkVrdk56a2N4MkorRDFlcDdBU285VGpjU2k2SkZsQnlkR0N2YWtyVWM5UT0ifQ==',
   accessToken: null, channelId: null, scPodcastId: null,
   range: 90, ytConnected: false, scConnected: false,
@@ -716,16 +707,13 @@ function setRange(days) {
 
 // ─── Init ─────────────────────────────────────────────────
 async function initDashboard() {
-  state.ytApiKey = document.getElementById('yt-api-key').value.trim();
-  state.ytChannelId = document.getElementById('yt-channel-id').value.trim();
-  state.ytClientId = document.getElementById('yt-client-id').value.trim();
   state.ytClientSecret = document.getElementById('yt-client-secret').value.trim();
-  // scToken is hardcoded — no need to read from input
+  // All other credentials are hardcoded
 
   setStatus('Connecting...', '');
 
-  if (!state.ytApiKey && !state.scToken) {
-    setStatus('Please enter at least one API credential.', 'err');
+  if (!state.ytClientSecret) {
+    setStatus('Please enter your YouTube OAuth Client Secret.', 'err');
     return;
   }
 
@@ -758,9 +746,7 @@ function openGoogleAuth() {
   });
 
   // Save credentials to localStorage so they survive the redirect on all browsers
-  localStorage.setItem('oas_yt_api_key', state.ytApiKey);
-  localStorage.setItem('oas_yt_channel_id', state.ytChannelId);
-  localStorage.setItem('oas_yt_client_id', state.ytClientId);
+  // Save only the client secret — everything else is hardcoded
   localStorage.setItem('oas_yt_client_secret', state.ytClientSecret);
 
   window.location.href = 'https://accounts.google.com/o/oauth2/v2/auth?' + params;
@@ -807,7 +793,7 @@ async function exchangeCode(code) {
     // Clean up URL and storage
     history.replaceState(null, '', window.location.pathname);
     ['yt_api_key','yt_client_id','yt_client_secret','sc_token'].forEach(k => sessionStorage.removeItem(k));
-    ['oas_yt_api_key','oas_yt_channel_id','oas_yt_client_id','oas_yt_client_secret','oas_sc_token'].forEach(k => localStorage.removeItem(k));
+    localStorage.removeItem('oas_yt_client_secret');
 
     document.getElementById('oauth-step').style.display = 'none';
     setStatus('YouTube & Simplecast connected.', 'ok');
@@ -1373,18 +1359,12 @@ async function boot() {
 
   if (code) {
     // Restore credentials — try localStorage first, fall back to sessionStorage
-    state.ytApiKey = localStorage.getItem('oas_yt_api_key') || sessionStorage.getItem('yt_api_key') || '';
-    state.ytChannelId = localStorage.getItem('oas_yt_channel_id') || sessionStorage.getItem('yt_channel_id') || '';
-    state.ytClientId = localStorage.getItem('oas_yt_client_id') || sessionStorage.getItem('yt_client_id') || '';
+    // Restore only the client secret — everything else is hardcoded
     state.ytClientSecret = localStorage.getItem('oas_yt_client_secret') || sessionStorage.getItem('yt_client_secret') || '';
-    // scToken is hardcoded — no need to restore
 
     // Clean up localStorage immediately after reading
-    ['oas_yt_api_key','oas_yt_channel_id','oas_yt_client_id','oas_yt_client_secret'].forEach(k => localStorage.removeItem(k));
+    localStorage.removeItem('oas_yt_client_secret');
 
-    document.getElementById('yt-api-key').value = state.ytApiKey;
-    document.getElementById('yt-channel-id').value = state.ytChannelId;
-    document.getElementById('yt-client-id').value = state.ytClientId;
     document.getElementById('yt-client-secret').value = state.ytClientSecret;
 
     setStatus('Google authorized! Connecting...', 'ok');
